@@ -1,0 +1,12 @@
+.{
+    .name = .mellon,
+    .version = "0.0.0",
+    .minimum_zig_version = "0.15.2",
+    .fingerprint = 0x2c2804d293ee3169, // Changing this has security and trust implications.
+    .dependencies = .{},
+    .paths = .{
+        "src",
+        "build.zig",
+        "build.zig.zon",
+    },
+}
