@@ -5,12 +5,13 @@ A high-performance shell-like REPL application written in [Zig](https://ziglang.
 ## Features
 
 - **Dual Mode Operation**: Use as a CLI tool for single commands or enter REPL mode for interactive commands
-- **Interactive REPL**: Command-line interface with a `⚡` prompt (when no arguments provided)
+- **Interactive REPL**: Command-line interface with a configurable prompt (defaults to `⚡`)
 - **CLI Tool**: Execute individual commands directly without entering REPL mode
 - **Shell Integration**: Execute standard shell commands directly
 - **File System Operations**: Built-in commands for reading, writing, copying, and deleting files
+- **Configurable Runtime**: `config` command and `~/.mellonrc` support for editor, prompt, and intro display
+- **Command History**: Arrow-key navigation in REPL input
 - **Colored Output**: Color-coded messages for better user experience (Red, Green, Blue, Cyan, Magenta, Yellow, White)
-- **Memory Efficient**: Written in Zig for fast execution and minimal resource usage
 
 ## Table of Contents
 
@@ -27,6 +28,7 @@ A high-performance shell-like REPL application written in [Zig](https://ziglang.
   - [Core Components](#core-components)
   - [Command System](#command-system)
   - [Module Details](#module-details)
+    - [Configuration](#configuration)
 - [Using the Binary](#using-the-binary)
   - [Adding to PATH](#adding-to-path)
   - [Creating Aliases](#creating-aliases)
@@ -91,6 +93,12 @@ mellon fs read --path=./README.md
 mellon fs write --path=./newfile.txt --editor=nvim
 mellon fs copy --from=./file1.txt --to=./file2.txt
 mellon fs delete --path=./oldfile.txt
+mellon fs get_abs --path=~/Documents
+
+# Configure settings
+mellon config set editor=code prompt=⚡ show_intro=false
+mellon config source
+mellon config
 ```
 
 CLI mode is perfect for:
@@ -108,12 +116,7 @@ Enter interactive mode by running Mellon without arguments:
 mellon
 ```
 
-You'll see the Mellon prompt:
-
-```
-Entering REPL mode. Type 'exit' or ':q' to quit.
-⚡
-```
+You'll see the Mellon prompt (default is `⚡`).
 
 In REPL mode, execute commands interactively:
 
@@ -131,7 +134,7 @@ README.md
 ⚡ help
 
 ⚡ exit
-Exiting with status: 0
+Goodbye! 👋
 ```
 
 Or explicitly enter REPL mode from CLI:
@@ -154,10 +157,14 @@ REPL mode is perfect for:
 mellon/
 ├── build.zig              # Zig build configuration
 ├── build.zig.zon          # Zig package manifest
+├── docs/
+│   └── test.md             # Intro/help text shown in REPL
 ├── src/
 │   ├── main.zig           # Application entry point
 │   ├── root.zig           # Main Mellon struct and command controller
 │   └── lib/
+│       ├── config.zig      # Config handling and .mellonrc parsing
+│       ├── history.zig     # In-memory REPL history
 │       ├── io.zig         # Input/Output and colored text handling
 │       ├── shell.zig      # Shell command execution
 │       └── file-system.zig # File operations (read, write, copy, delete)
@@ -196,11 +203,11 @@ $ mellon
         ↓
    Mellon.controller() - Routes commands
         ↓
-   ├─ "exit" / ":q" → Exit program
-   ├─ "file_system" / "fs" → FileSystem.controller()
-   ├─ "help" → Display help
-   ├─ "repl" → Already in REPL mode
-   └─ Other → Shell.controller()
+     ├─ "exit" / ":q" → Exit program
+     ├─ "file-system" / "fs" → FileSystem.controller()
+     ├─ "help" → Display help
+     ├─ "repl" → Already in REPL mode
+     └─ Other → Shell.controller()
 ```
 
 ## Deeper Dive
@@ -215,8 +222,23 @@ The entry point initializes the Mellon application and handles command-line argu
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
+     defer _ = gpa.deinit();
 
-    var mellon = Mellon.init(&stdin_reader, &stdout_writer);
+     var config = Config.init(allocator);
+     defer config.deinit();
+
+     var history = History.init(allocator);
+     defer history.deinit();
+
+     var stdin_buffer: [1024]u8 = undefined;
+     var stdout_buffer: [1024]u8 = undefined;
+     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+     var stdin_reader = std.fs.File.stdin().readerStreaming(&stdin_buffer);
+     var io = IO.init(&stdin_reader, &stdout_writer, &history);
+     defer io.deinit();
+
+     var mellon = Mellon.init(&io, &config);
+     defer mellon.deinit();
 
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
@@ -250,10 +272,13 @@ Mellon recognizes these built-in commands:
 | Command       | Aliases | Function                      |
 | ------------- | ------- | ----------------------------- |
 | `exit`        | `:q`    | Exit the application          |
-| `file_system` | `fs`    | Access file system operations |
+| `file-system` | `fs`    | Access file system operations |
+| `config`      | -       | Configure prompt/editor/intro |
 | `help`        | -       | Display help information      |
 | `repl`        | -       | Enter interactive REPL mode   |
 | `(other)`     | -       | Passed to shell executor      |
+
+`help` prints the contents of `docs/test.md`.
 
 #### Shell Commands
 
@@ -275,14 +300,14 @@ davidcharles
 
 _The default text editor is Vim, but you can choose Nvim or VS Code when prompted._
 
-Access file operations via `fs` or `file_system`:
+Access file operations via `fs` or `file-system`:
 
 ```
 ⚡ fs read --path=./README.md
 ⚡ fs write --path=./newfile.txt --editor=nvim
 ⚡ fs copy --from=./file1.txt --to=./file2.txt
 ⚡ fs delete --path=./oldfile.txt
-⚡ fs get-abs --path=~/Documents
+⚡ fs get_abs --path=~/Documents
 ```
 
 ### Module Details
@@ -349,7 +374,8 @@ Path handling features:
 - Supports `~` expansion (home directory)
 - Supports relative paths (`.`, `..`)
 - Supports absolute paths (`/path/to/file`)
-- Validates file types (`.txt`, `.md`, `.json`)
+- Validates file types (`.txt`, `.md`, `.json`, `.js`, `.ts`)
+- Rejects files larger than 10MB when reading
 
 Example absolute path conversion:
 
@@ -357,6 +383,25 @@ Example absolute path conversion:
 ~/Documents/file.md → /Users/davidcharles/Documents/file.md
 ../config.json → /Users/davidcharles/projects/config.json
 ./data.txt → /Users/davidcharles/repos/mellon/data.txt
+```
+
+## Configuration
+
+Mellon reads configuration from `~/.mellonrc` on startup. You can edit it directly or use the `config` command.
+
+Supported keys:
+
+- `editor` (vim, nvim, code)
+- `prompt` (single token; spaces are not supported)
+- `show_intro` (true/false)
+
+Example:
+
+```
+# ~/.mellonrc
+editor=vim
+prompt=⚡
+show_intro=true
 ```
 
 ## Using the Binary
@@ -460,7 +505,7 @@ README.md
 ⚡ fs read --path=./README.md
 
 ⚡ exit
-Exiting with status: 0
+Goodbye! 👋
 ```
 
 #### CLI Command Mode

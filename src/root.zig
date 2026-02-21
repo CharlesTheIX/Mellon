@@ -56,14 +56,14 @@ pub const Mellon = struct {
 
     fn exit(self: *Mellon, status: u8) !void {
         switch (status) {
-            0 => try self.io.print("✅ Exiting Successfully\n", .Green),
-            1 => try self.io.print("⚠️ Exiting with Warnings\n", .Yellow),
+            0 => try self.io.print("✅ Exiting Successfully\n\n", .Green),
+            1 => try self.io.print("⚠️ Exiting with Warnings\n\n", .Yellow),
             200 => {
-                try self.io.print("Goodbye! 👋\n", .Green);
+                try self.io.print("Goodbye! 👋\n\n", .Green);
                 std.process.exit(0);
             },
             else => {
-                const msg = try std.fmt.allocPrint(std.heap.page_allocator, "❌ Exiting with Errors (code: {d})\n", .{status});
+                const msg = try std.fmt.allocPrint(std.heap.page_allocator, "❌ Exiting with Errors (code: {d})\n\n", .{status});
                 defer std.heap.page_allocator.free(msg);
                 try self.io.print(msg, .Red);
             },
@@ -73,13 +73,14 @@ pub const Mellon = struct {
 
     fn help(self: *Mellon) !void {
         try Shell.clear();
-        const content = try self.fs.readFile("./docs/test.md");
+        const content = try self.fs.readFile("./docs/help.txt");
         try self.io.print(content, .Green);
+        try self.io.print("\n\n", .White);
     }
 
     fn printIntro(self: *Mellon) !void {
         try Shell.clear();
-        const content = try self.fs.readFile("./docs/test.md");
+        const content = try self.fs.readFile("./docs/intro.txt");
         try self.io.print(content, .Green);
         try self.io.print("\n\n", .White);
     }

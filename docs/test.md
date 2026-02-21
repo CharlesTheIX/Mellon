@@ -1,1 +1,30 @@
-# Docs file
+MELLON HELP
+
+USAGE
+mellon [command] [args]
+mellon # REPL mode
+
+BUILT-IN
+help Show this help
+exit | :q Exit
+repl Enter REPL
+config Edit config in editor
+config set k=v [...] Set config keys
+config source Reload config
+file-system | fs File ops
+
+FS
+fs read --path=FILE
+fs write --path=FILE [--editor=vim|nvim|code]
+fs copy --from=SRC --to=DEST
+fs delete --path=FILE
+fs get_abs --path=PATH
+
+CONFIG (~/.mellonrc)
+editor=vim|nvim|code
+prompt=⚡
+show_intro=true|false
+
+TIPS
+Unrecognized commands go to the shell.
+Arrow keys navigate history.

@@ -2,21 +2,8 @@ const std = @import("std");
 const Shell = @import("./shell.zig").Shell;
 const Editor = @import("./file-system.zig").Editor;
 
-const Fn = enum {
-    Edit,
-    Set,
-    Source,
-    Invalid,
-
-    fn get(string: []const u8) Fn {
-        if (std.mem.eql(u8, string, "edit") or std.mem.eql(u8, string, "-e")) return .Edit;
-        if (std.mem.eql(u8, string, "set") or std.mem.eql(u8, string, "-s")) return .Set;
-        if (std.mem.eql(u8, string, "source") or std.mem.eql(u8, string, "-sc")) return .Source;
-        return .Invalid;
-    }
-};
-
 pub const Config = struct {
+    show_cwd: bool,
     show_intro: bool,
     editor: []const u8,
     prompt: []const u8,
@@ -30,6 +17,7 @@ pub const Config = struct {
         const default_editor = allocator.dupe(u8, "vim") catch "vim";
         const default_prompt = allocator.dupe(u8, "⚡") catch "⚡";
         var config = Config{
+            .show_cwd = true,
             .show_intro = true,
             .allocator = allocator,
             .editor = default_editor,
@@ -54,13 +42,13 @@ pub const Config = struct {
                     if (key.len == 0 or value.len == 0) continue;
                     try self.set(key, value);
                 }
-                self.save() catch {};
-                return;
+                return self.save() catch {};
             },
             .Source => return try self.load(),
             else => return try self.edit(),
         }
     }
+
     pub fn deinit(self: *Config) void {
         self.allocator.free(self.editor);
         self.allocator.free(self.prompt);
@@ -95,6 +83,7 @@ pub const Config = struct {
         while (lines.next()) |line| {
             const trimmed = std.mem.trim(u8, line, &std.ascii.whitespace);
             if (trimmed.len == 0 or trimmed[0] == '#') continue;
+
             var parts = std.mem.splitScalar(u8, trimmed, '=');
             const key = std.mem.trim(u8, parts.first(), &std.ascii.whitespace);
             const value_str = std.mem.trim(u8, parts.rest(), &std.ascii.whitespace);
@@ -111,12 +100,12 @@ pub const Config = struct {
         var buffer: [2048]u8 = undefined;
         var stream = std.io.fixedBufferStream(&buffer);
         const writer = stream.writer();
-        const show_intro_str = if (self.show_intro) "true" else "false";
 
         try writer.print("# Mellon Configuration File\n", .{});
-        try writer.print("editor={s}\n\n", .{self.editor});
-        try writer.print("prompt={s}\n\n", .{self.prompt});
-        try writer.print("show_intro={s}\n\n", .{show_intro_str});
+        try writer.print("editor={s}\n", .{self.editor});
+        try writer.print("prompt={s}\n", .{self.prompt});
+        try writer.print("show_cwd={s}\n", .{if (self.show_cwd) "true" else "false"});
+        try writer.print("show_intro={s}\n", .{if (self.show_intro) "true" else "false"});
         try file.writeAll(stream.getWritten());
     }
 
@@ -142,5 +131,25 @@ pub const Config = struct {
             if (std.mem.eql(u8, value, "false")) self.show_intro = false;
             return;
         }
+
+        if (std.mem.eql(u8, key, "show_cwd")) {
+            self.show_cwd = true;
+            if (std.mem.eql(u8, value, "false")) self.show_cwd = false;
+            return;
+        }
+    }
+};
+
+const Fn = enum {
+    Edit,
+    Set,
+    Source,
+    Invalid,
+
+    fn get(string: []const u8) Fn {
+        if (std.mem.eql(u8, string, "edit") or std.mem.eql(u8, string, "-e")) return .Edit;
+        if (std.mem.eql(u8, string, "set") or std.mem.eql(u8, string, "-s")) return .Set;
+        if (std.mem.eql(u8, string, "source") or std.mem.eql(u8, string, "-sc")) return .Source;
+        return .Invalid;
     }
 };

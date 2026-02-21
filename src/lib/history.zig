@@ -51,9 +51,7 @@ pub const History = struct {
         if (self.commands.items.len == 0) return null;
         if (self.current_index) |idx| {
             if (idx > 0) self.current_index = idx - 1;
-        } else {
-            self.current_index = self.commands.items.len - 1;
-        }
+        } else self.current_index = self.commands.items.len - 1;
         if (self.current_index) |idx| return self.commands.items[idx];
         return null;
     }

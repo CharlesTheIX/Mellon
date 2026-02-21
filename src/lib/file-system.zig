@@ -4,12 +4,14 @@ const Shell = @import("./shell.zig").Shell;
 const Config = @import("./config.zig").Config;
 
 pub const Editor = enum {
+    Nano,
     Nvim,
     Vim,
     VsCode,
     Invalid,
 
     pub fn get(string: []const u8) Editor {
+        if (std.mem.eql(u8, string, "nano")) return .Nano;
         if (std.mem.eql(u8, string, "nvim")) return .Nvim;
         if (std.mem.eql(u8, string, "vim") or string.len == 0) return .Vim;
         if (std.mem.eql(u8, string, "vscode") or std.mem.eql(u8, string, "code")) return .VsCode;
@@ -50,7 +52,7 @@ const Fn = enum {
     Delete,
     GetAbs,
     Help,
-    Read,
+    Open,
     Write,
     Invalid,
 
@@ -59,7 +61,7 @@ const Fn = enum {
         if (std.mem.eql(u8, string, "delete") or std.mem.eql(u8, string, "-d")) return .Delete;
         if (std.mem.eql(u8, string, "get_abs") or std.mem.eql(u8, string, "-abs")) return .GetAbs;
         if (std.mem.eql(u8, string, "help") or std.mem.eql(u8, string, "-h")) return .Help;
-        if (std.mem.eql(u8, string, "read") or std.mem.eql(u8, string, "-r")) return .Read;
+        if (std.mem.eql(u8, string, "open") or std.mem.eql(u8, string, "-o")) return .Open;
         if (std.mem.eql(u8, string, "write") or std.mem.eql(u8, string, "-w")) return .Write;
         return .Invalid;
     }
@@ -118,9 +120,9 @@ pub const FileSystem = struct {
                 return try self.io.print(abs_path, .Green);
             },
             .Help => return try self.help(),
-            .Read => return try self.read(options),
+            .Open => return try self.open(options),
             .Write => return try self.write(options),
-            .Invalid => return try self.io.print("❌ Invalid func: Please use 'help' OR '-h' for help.\n", .Red),
+            .Invalid => return try self.io.print("❌ Invalid func: Please use 'help' OR '-h' for help.\n\n", .Red),
         }
     }
 
@@ -155,17 +157,17 @@ pub const FileSystem = struct {
         }
 
         const file_type = FileType.get(from);
-        if (file_type == .Invalid) return try self.io.print("❌ Invalid File Type.\n", .Red);
+        if (file_type == .Invalid) return try self.io.print("❌ Invalid File Type.\n\n", .Red);
 
         const abs_to_path: []const u8 = try getAbsPath(to);
         const abs_from_path: []const u8 = try getAbsPath(from);
         _ = std.fs.copyFileAbsolute(abs_from_path, abs_to_path, .{}) catch {
-            return try self.io.print("❌ File not found.\n", .Red);
+            return try self.io.print("❌ File not found.\n\n", .Red);
         };
 
         const msg = try std.fmt.allocPrint(
             std.heap.page_allocator,
-            "📋 File copied:\n   📄 from: {s}\n   📄 to: {s}\n",
+            "📋 File copied:\n   📄 from: {s}\n   📄 to: {s}\n\n",
             .{ abs_from_path, abs_to_path },
         );
         defer std.heap.page_allocator.free(msg);
@@ -196,13 +198,13 @@ pub const FileSystem = struct {
         }
 
         const file_type = FileType.get(path);
-        if (file_type == .Invalid) return try self.io.print("❌ Invalid File Type.\n", .Red);
+        if (file_type == .Invalid) return try self.io.print("❌ Invalid File Type.\n\n", .Red);
 
         const abs_path: []const u8 = try getAbsPath(path);
         _ = std.fs.deleteFileAbsolute(abs_path) catch {
-            return try self.io.print("❌ File not found at path.\n", .Red);
+            return try self.io.print("❌ File not found at path.\n\n", .Red);
         };
-        const msg = try std.fmt.allocPrint(std.heap.page_allocator, "🗑️  File Deleted: {s}\n", .{abs_path});
+        const msg = try std.fmt.allocPrint(std.heap.page_allocator, "🗑️  File Deleted: {s}\n\n", .{abs_path});
         defer std.heap.page_allocator.free(msg);
         try self.io.print(msg, .Green);
     }
@@ -225,6 +227,7 @@ pub const FileSystem = struct {
             try self.io.print("📝 Path ⚡ ", .Green);
             path = try self.io.readLine();
         }
+
         const abs_path: []const u8 = try getAbsPath(path);
         return abs_path;
     }
@@ -233,42 +236,7 @@ pub const FileSystem = struct {
         _ = self;
     }
 
-    pub fn readFile(self: *FileSystem, path: []const u8) ![]const u8 {
-        const file_type = FileType.get(path);
-        if (file_type == .Invalid) {
-            try self.io.print("❌ Invalid File Type.\n", .Red);
-            return "";
-        }
-
-        const abs_path: []const u8 = try getAbsPath(path);
-        var file = std.fs.openFileAbsolute(abs_path, .{ .mode = .read_only }) catch {
-            try self.io.print("❌ File not found at path.\n", .Red);
-            return "";
-        };
-        defer file.close();
-
-        const file_size = try file.getEndPos();
-        if (file_size == 0) return "";
-        if (file_size > 10 * 1024 * 1024) {
-            try self.io.print("❌ File is too large to read (limit: 10MB).\n", .Red);
-            return "";
-        }
-
-        const allocator = std.heap.page_allocator;
-        const buffer = allocator.alloc(u8, file_size) catch {
-            try self.io.print("❌ Failed to allocate buffer for file content.\n", .Red);
-            return "";
-        };
-        const file_bytes = try file.readAll(buffer);
-        if (file_bytes != file_size) {
-            try self.io.print("❌ Failed to read entire file content.\n", .Red);
-            allocator.free(buffer);
-            return "";
-        }
-        return buffer[0..file_size];
-    }
-
-    fn read(self: *FileSystem, args: []const u8) !void {
+    fn open(self: *FileSystem, args: []const u8) !void {
         var path: []const u8 = "";
         var arg_parts = std.mem.splitSequence(u8, args, " ");
 
@@ -290,6 +258,41 @@ pub const FileSystem = struct {
         const content = try self.readFile(path);
         try self.io.print(content, .Magenta);
         try self.io.print("\n\n", .Magenta);
+    }
+
+    pub fn readFile(self: *FileSystem, path: []const u8) ![]const u8 {
+        const file_type = FileType.get(path);
+        if (file_type == .Invalid) {
+            try self.io.print("❌ Invalid File Type.\n\n", .Red);
+            return "";
+        }
+
+        const abs_path: []const u8 = try getAbsPath(path);
+        var file = std.fs.openFileAbsolute(abs_path, .{ .mode = .read_only }) catch {
+            try self.io.print("❌ File not found at path.\n\n", .Red);
+            return "";
+        };
+        defer file.close();
+
+        const file_size = try file.getEndPos();
+        if (file_size == 0) return "";
+        if (file_size > 10 * 1024 * 1024) {
+            try self.io.print("❌ File is too large to read (limit: 10MB).\n\n", .Red);
+            return "";
+        }
+
+        const allocator = std.heap.page_allocator;
+        const buffer = allocator.alloc(u8, file_size) catch {
+            try self.io.print("❌ Failed to allocate buffer for file content.\n\n", .Red);
+            return "";
+        };
+        const file_bytes = try file.readAll(buffer);
+        if (file_bytes != file_size) {
+            try self.io.print("❌ Failed to read entire file content.\n\n", .Red);
+            allocator.free(buffer);
+            return "";
+        }
+        return buffer[0..file_size];
     }
 
     fn write(self: *FileSystem, args: []const u8) !void {
@@ -321,7 +324,7 @@ pub const FileSystem = struct {
         }
 
         const file_type = FileType.get(path);
-        if (file_type == .Invalid) return self.io.print("❌ Invalid File Type.\n", .Red);
+        if (file_type == .Invalid) return self.io.print("❌ Invalid File Type.\n\n", .Red);
         const abs_path: []const u8 = try getAbsPath(path);
         try Shell.openEditor(editor, abs_path);
     }

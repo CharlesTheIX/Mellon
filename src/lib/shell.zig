@@ -71,7 +71,7 @@ pub const Shell = struct {
     // Instance Methods
     pub fn controller(self: *Shell, command: []const u8, args: []const u8) !void {
         const path = try getCommandIsInPATH(command);
-        if (std.mem.eql(u8, path, "")) return self.io.print("❌ Shell Command Not Found\n", .Red);
+        if (std.mem.eql(u8, path, "")) return self.io.print("❌ Shell Command Not Found\n\n", .Red);
 
         if (std.mem.eql(u8, command, "pwd")) return try pwd();
         if (std.mem.eql(u8, command, "clear")) return try clear();

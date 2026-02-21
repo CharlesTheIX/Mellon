@@ -1,8 +1,9 @@
 const std = @import("std");
 const IO = @import("mellon").IO;
-const History = @import("mellon").History;
 const Mellon = @import("mellon").Mellon;
 const Config = @import("mellon").Config;
+const History = @import("mellon").History;
+const pwd = @import(".pwd.zig").pwd;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -28,5 +29,12 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
     const cli_args = if (args.len > 1) args[1..] else &[_][]const u8{}; // Skip the program name (args[0])
-    try mellon.run(cli_args);
+
+    const password = try io.readPassword("Password: ");
+    if (std.mem.eql(u8, password, pwd)) {
+        try io.print("Password correct. Starting Mellon...", .Green);
+        return try mellon.run(cli_args);
+    }
+
+    return try io.print("Incorrect password. Exiting.", .Red);
 }
