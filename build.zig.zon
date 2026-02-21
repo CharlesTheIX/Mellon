@@ -3,7 +3,12 @@
     .version = "0.0.1",
     .minimum_zig_version = "0.15.2",
     .fingerprint = 0x2c2804d293ee3169, // Changing this has security and trust implications.
-    .dependencies = .{},
+    .dependencies = .{
+        .raylib_zig = .{
+            .url = "git+https://github.com/raylib-zig/raylib-zig#devel",
+            .hash = "raylib_zig-5.6.0-dev-KE8REE1LBQCL7lia-DwUkusWI1G4kJmhtatLh2kNsuiE",
+        },
+    },
     .paths = .{
         "src",
         "docs",

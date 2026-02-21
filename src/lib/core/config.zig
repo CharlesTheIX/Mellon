@@ -7,18 +7,21 @@ pub const Config = struct {
     show_intro: bool,
     editor: []const u8,
     prompt: []const u8,
+    log_dir: []const u8,
     config_path: []const u8,
     allocator: std.mem.Allocator,
 
     // Static Methods
     pub fn init(allocator: std.mem.Allocator) Config {
         const home = std.posix.getenv("HOME") orelse "~";
+        const log_dir = std.fmt.allocPrint(allocator, "{s}/.mellon_logs", .{home}) catch "";
         const config_path = std.fmt.allocPrint(allocator, "{s}/.mellonrc", .{home}) catch "";
         const default_editor = allocator.dupe(u8, "vim") catch "vim";
         const default_prompt = allocator.dupe(u8, "⚡") catch "⚡";
         var config = Config{
             .show_cwd = true,
             .show_intro = true,
+            .log_dir = log_dir,
             .allocator = allocator,
             .editor = default_editor,
             .prompt = default_prompt,
@@ -60,6 +63,15 @@ pub const Config = struct {
         const editor = Editor.get(self.editor);
         try Shell.openEditor(editor, self.config_path);
         try self.load();
+    }
+
+    pub fn getFullPrompt(self: *const Config) ![]const u8 {
+        if (self.show_cwd) {
+            const cwd = try std.fs.cwd().realpathAlloc(self.allocator, ".");
+            defer self.allocator.free(cwd);
+            return try std.fmt.allocPrint(self.allocator, "{s} {s} ", .{ cwd, self.prompt });
+        }
+        return try std.fmt.allocPrint(self.allocator, "{s} ", .{self.prompt});
     }
 
     fn load(self: *Config) !void {
@@ -104,6 +116,7 @@ pub const Config = struct {
         try writer.print("# Mellon Configuration File\n", .{});
         try writer.print("editor={s}\n", .{self.editor});
         try writer.print("prompt={s}\n", .{self.prompt});
+        try writer.print("log_dir={s}\n", .{self.log_dir});
         try writer.print("show_cwd={s}\n", .{if (self.show_cwd) "true" else "false"});
         try writer.print("show_intro={s}\n", .{if (self.show_intro) "true" else "false"});
         try file.writeAll(stream.getWritten());
@@ -113,16 +126,16 @@ pub const Config = struct {
         if (value.len == 0) return;
 
         if (std.mem.eql(u8, key, "editor")) {
-            const new_editor = try self.allocator.dupe(u8, value);
+            const new = try self.allocator.dupe(u8, value);
             self.allocator.free(self.editor);
-            self.editor = new_editor;
+            self.editor = new;
             return;
         }
 
         if (std.mem.eql(u8, key, "prompt")) {
-            const new_prompt = try self.allocator.dupe(u8, value);
+            const new = try self.allocator.dupe(u8, value);
             self.allocator.free(self.prompt);
-            self.prompt = new_prompt;
+            self.prompt = new;
             return;
         }
 

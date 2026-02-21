@@ -4,4 +4,4 @@
 .test-data
 zig-out
 
-.pwd.zig
+.env.zig

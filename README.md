@@ -95,8 +95,11 @@ mellon fs copy --from=./file1.txt --to=./file2.txt
 mellon fs delete --path=./oldfile.txt
 mellon fs get_abs --path=~/Documents
 
+# Benchmark a command
+mellon benchmark ls -la
+
 # Configure settings
-mellon config set editor=code prompt=⚡ show_intro=false
+mellon config set editor=code prompt=⚡ show_intro=false show_cwd=false
 mellon config source
 mellon config
 ```
@@ -118,6 +121,8 @@ mellon
 
 You'll see the Mellon prompt (default is `⚡`).
 
+On startup, Mellon prompts for a password sourced from [src/.env.zig](src/.env.zig).
+
 In REPL mode, execute commands interactively:
 
 ```
@@ -130,6 +135,8 @@ build.zig.zon           zig-out
 README.md
 
 ⚡ fs read --path=./README.md
+
+⚡ benchmark ls -la
 
 ⚡ help
 
@@ -158,8 +165,10 @@ mellon/
 ├── build.zig              # Zig build configuration
 ├── build.zig.zon          # Zig package manifest
 ├── docs/
-│   └── test.md             # Intro/help text shown in REPL
+│   ├── help.txt            # Help text shown by the help command
+│   └── intro.txt           # Intro text shown on REPL start
 ├── src/
+│   ├── .env.zig           # Local password value for startup prompt
 │   ├── main.zig           # Application entry point
 │   ├── root.zig           # Main Mellon struct and command controller
 │   └── lib/
@@ -227,14 +236,11 @@ pub fn main() !void {
      var config = Config.init(allocator);
      defer config.deinit();
 
-     var history = History.init(allocator);
-     defer history.deinit();
-
      var stdin_buffer: [1024]u8 = undefined;
      var stdout_buffer: [1024]u8 = undefined;
      var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
      var stdin_reader = std.fs.File.stdin().readerStreaming(&stdin_buffer);
-     var io = IO.init(&stdin_reader, &stdout_writer, &history);
+     var io = IO.init(allocator, &stdin_reader, &stdout_writer, &config);
      defer io.deinit();
 
      var mellon = Mellon.init(&io, &config);
@@ -245,7 +251,9 @@ pub fn main() !void {
 
     // Skip program name (args[0]) and pass remaining to run()
     const cli_args = if (args.len > 1) args[1..] else &[_][]const u8{};
-    try mellon.run(cli_args);
+     const password = try io.readPassword("PASSWORD: ");
+     if (std.mem.eql(u8, password, pwd)) return try mellon.run(cli_args);
+     return try io.print("PASSWORD INCORRECT\n\n", .Red);
 }
 ```
 
@@ -271,6 +279,7 @@ Mellon recognizes these built-in commands:
 
 | Command       | Aliases | Function                      |
 | ------------- | ------- | ----------------------------- |
+| `benchmark`   | `bench` | Run a timed command           |
 | `exit`        | `:q`    | Exit the application          |
 | `file-system` | `fs`    | Access file system operations |
 | `config`      | -       | Configure prompt/editor/intro |
@@ -278,7 +287,8 @@ Mellon recognizes these built-in commands:
 | `repl`        | -       | Enter interactive REPL mode   |
 | `(other)`     | -       | Passed to shell executor      |
 
-`help` prints the contents of `docs/test.md`.
+`help` prints the contents of `docs/help.txt`.
+If `show_intro` is enabled, REPL startup displays `docs/intro.txt`.
 
 #### Shell Commands
 
@@ -394,6 +404,7 @@ Supported keys:
 - `editor` (vim, nvim, code)
 - `prompt` (single token; spaces are not supported)
 - `show_intro` (true/false)
+- `show_cwd` (true/false)
 
 Example:
 
@@ -402,6 +413,7 @@ Example:
 editor=vim
 prompt=⚡
 show_intro=true
+show_cwd=true
 ```
 
 ## Using the Binary

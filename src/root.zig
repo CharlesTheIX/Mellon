@@ -1,27 +1,10 @@
 const std = @import("std");
-pub const IO = @import("./lib/io.zig").IO;
-const Shell = @import("./lib/shell.zig").Shell;
-pub const Config = @import("./lib/config.zig").Config;
-const FS = @import("./lib/file-system.zig").FileSystem;
-pub const History = @import("./lib/history.zig").History;
+pub const IO = @import("./lib/core/io.zig").IO;
+const Shell = @import("./lib/core/shell.zig").Shell;
+pub const Config = @import("./lib/core/config.zig").Config;
+const FS = @import("./lib/core/file-system.zig").FileSystem;
 
-const Cmd = enum {
-    Config,
-    Exit,
-    FileSystem,
-    Help,
-    Repl,
-    Invalid,
-
-    fn get(string: []const u8) Cmd {
-        if (std.mem.eql(u8, string, "config")) return .Config;
-        if (std.mem.eql(u8, string, "exit") or std.mem.eql(u8, string, ":q")) return .Exit;
-        if (std.mem.eql(u8, string, "file-system") or std.mem.eql(u8, string, "fs")) return .FileSystem;
-        if (std.mem.eql(u8, string, "help")) return .Help;
-        if (std.mem.eql(u8, string, "repl")) return .Repl;
-        return .Invalid;
-    }
-};
+const naseLaska = @import("./lib/nase-laska/game.zig").naseLaska;
 
 pub const Mellon = struct {
     fs: FS,
@@ -37,13 +20,37 @@ pub const Mellon = struct {
     }
 
     // Instance Methods
+    pub fn benchmark(self: *Mellon, args: []const u8) anyerror!void {
+        if (args.len == 0) return self.io.print("Usage: benchmark <command> [args]\n\n", .Yellow);
+        var parts = std.mem.splitSequence(u8, args, " ");
+        const cmd = parts.first();
+        const cmd_args = parts.rest();
+        if (cmd.len == 0) return self.io.print("Usage: benchmark <command> [args]\n\n", .Yellow);
+        const start = std.time.nanoTimestamp();
+
+        try self.controller(cmd, cmd_args);
+
+        const end = std.time.nanoTimestamp();
+        const elapsed_ns: u64 = if (end >= start) @as(u64, @intCast(end - start)) else 0;
+        const elapsed_ms = @as(u64, elapsed_ns / std.time.ns_per_ms);
+        const msg = try std.fmt.allocPrint(
+            std.heap.page_allocator,
+            "\n⏱️  Benchmark: {s} {s}\nElapsed: {d} ms ({d} ns)\n\n",
+            .{ cmd, cmd_args, elapsed_ms, elapsed_ns },
+        );
+        defer std.heap.page_allocator.free(msg);
+        try self.io.print(msg, .Cyan);
+    }
+
     fn controller(self: *Mellon, cmd: []const u8, args: []const u8) !void {
         const command = Cmd.get(cmd);
         switch (command) {
+            .Benchmark => return benchmark(self, args) catch return try self.io.print("❌ Benchmark failed\n\n", .Red),
             .Config => return try self.config.controller(args),
             .Exit => return try self.exit(200),
             .FileSystem => return try self.fs.controller(args),
             .Help => return try self.help(),
+            .NaseLaska => return try naseLaska(),
             .Repl => return,
             .Invalid => return try self.shell.controller(cmd, args),
         }
@@ -89,7 +96,9 @@ pub const Mellon = struct {
         if (self.config.show_intro) try self.printIntro();
 
         while (true) {
-            try self.io.print(self.config.prompt, .Green);
+            const prompt = try self.config.getFullPrompt();
+            defer self.config.allocator.free(prompt);
+            try self.io.print(prompt, .Green);
             var buffer: [1024]u8 = undefined;
             const line = try self.io.readLineWithHistory(&buffer);
             if (line.len == 0) continue;
@@ -109,5 +118,27 @@ pub const Mellon = struct {
         const cmd_args = if (args.len > 1) try std.mem.join(std.heap.page_allocator, " ", args[1..]) else "";
         defer if (cmd_args.len > 0) std.heap.page_allocator.free(cmd_args);
         try self.controller(cmd, cmd_args);
+    }
+};
+
+const Cmd = enum {
+    Benchmark,
+    Config,
+    Exit,
+    FileSystem,
+    Help,
+    NaseLaska,
+    Repl,
+    Invalid,
+
+    fn get(string: []const u8) Cmd {
+        if (std.mem.eql(u8, string, "benchmark") or std.mem.eql(u8, string, "bench")) return .Benchmark;
+        if (std.mem.eql(u8, string, "config")) return .Config;
+        if (std.mem.eql(u8, string, "exit") or std.mem.eql(u8, string, ":q")) return .Exit;
+        if (std.mem.eql(u8, string, "file-system") or std.mem.eql(u8, string, "fs")) return .FileSystem;
+        if (std.mem.eql(u8, string, "help")) return .Help;
+        if (std.mem.eql(u8, string, "nase-laska")) return .NaseLaska;
+        if (std.mem.eql(u8, string, "repl")) return .Repl;
+        return .Invalid;
     }
 };

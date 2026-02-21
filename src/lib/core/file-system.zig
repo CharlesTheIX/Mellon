@@ -3,70 +3,6 @@ const IO = @import("./io.zig").IO;
 const Shell = @import("./shell.zig").Shell;
 const Config = @import("./config.zig").Config;
 
-pub const Editor = enum {
-    Nano,
-    Nvim,
-    Vim,
-    VsCode,
-    Invalid,
-
-    pub fn get(string: []const u8) Editor {
-        if (std.mem.eql(u8, string, "nano")) return .Nano;
-        if (std.mem.eql(u8, string, "nvim")) return .Nvim;
-        if (std.mem.eql(u8, string, "vim") or string.len == 0) return .Vim;
-        if (std.mem.eql(u8, string, "vscode") or std.mem.eql(u8, string, "code")) return .VsCode;
-        return .Invalid;
-    }
-};
-
-const FileType = enum {
-    JS,
-    JSON,
-    MD,
-    TS,
-    Txt,
-    Invalid,
-
-    fn get(path: []const u8) FileType {
-        if (path.len == 0) return .Invalid;
-
-        var path_parts = std.mem.splitSequence(u8, path, "/");
-        var file_name: []const u8 = undefined;
-        while (path_parts.next()) |part| file_name = part;
-
-        var file_name_parts = std.mem.splitSequence(u8, file_name, ".");
-        var file_type: []const u8 = "";
-        while (file_name_parts.next()) |part| file_type = part;
-
-        if (std.mem.eql(u8, file_type, "js")) return .JS;
-        if (std.mem.eql(u8, file_type, "json")) return .JSON;
-        if (std.mem.eql(u8, file_type, "md")) return .MD;
-        if (std.mem.eql(u8, file_type, "ts")) return .TS;
-        if (std.mem.eql(u8, file_type, "txt")) return .Txt;
-        return .Invalid;
-    }
-};
-
-const Fn = enum {
-    Copy,
-    Delete,
-    GetAbs,
-    Help,
-    Open,
-    Write,
-    Invalid,
-
-    fn get(string: []const u8) Fn {
-        if (std.mem.eql(u8, string, "copy") or std.mem.eql(u8, string, "-cp")) return .Copy;
-        if (std.mem.eql(u8, string, "delete") or std.mem.eql(u8, string, "-d")) return .Delete;
-        if (std.mem.eql(u8, string, "get_abs") or std.mem.eql(u8, string, "-abs")) return .GetAbs;
-        if (std.mem.eql(u8, string, "help") or std.mem.eql(u8, string, "-h")) return .Help;
-        if (std.mem.eql(u8, string, "open") or std.mem.eql(u8, string, "-o")) return .Open;
-        if (std.mem.eql(u8, string, "write") or std.mem.eql(u8, string, "-w")) return .Write;
-        return .Invalid;
-    }
-};
-
 pub const FileSystem = struct {
     io: *IO,
     config: *Config,
@@ -120,7 +56,7 @@ pub const FileSystem = struct {
                 return try self.io.print(abs_path, .Green);
             },
             .Help => return try self.help(),
-            .Open => return try self.open(options),
+            .Read => return try self.read(options),
             .Write => return try self.write(options),
             .Invalid => return try self.io.print("❌ Invalid func: Please use 'help' OR '-h' for help.\n\n", .Red),
         }
@@ -143,14 +79,16 @@ pub const FileSystem = struct {
         }
 
         while (from.len == 0) {
-            try self.io.print("📝 From ⚡ ", .Green);
+            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📂 From {s} ", .{self.config.prompt});
+            try self.io.print(msg, .Green);
             var buffer: [1024]u8 = undefined;
             var stdin_reader = std.fs.File.stdin().readerStreaming(&buffer);
             if (try stdin_reader.interface.takeDelimiter('\n')) |line| from = line;
         }
 
         while (to.len == 0) {
-            try self.io.print("📝 To ⚡ ", .Green);
+            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📂 To {s} ", .{self.config.prompt});
+            try self.io.print(msg, .Green);
             var buffer: [1024]u8 = undefined;
             var stdin_reader = std.fs.File.stdin().readerStreaming(&buffer);
             if (try stdin_reader.interface.takeDelimiter('\n')) |line| to = line;
@@ -193,7 +131,8 @@ pub const FileSystem = struct {
         }
 
         while (path.len == 0) {
-            try self.io.print("📝 Path ⚡ ", .Green);
+            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📝 Path {s} ", .{self.config.prompt});
+            try self.io.print(msg, .Green);
             path = try self.io.readLine();
         }
 
@@ -224,7 +163,8 @@ pub const FileSystem = struct {
         }
 
         while (path.len == 0) {
-            try self.io.print("📝 Path ⚡ ", .Green);
+            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📝 Path {s} ", .{self.config.prompt});
+            try self.io.print(msg, .Green);
             path = try self.io.readLine();
         }
 
@@ -233,10 +173,13 @@ pub const FileSystem = struct {
     }
 
     fn help(self: *FileSystem) !void {
-        _ = self;
+        try Shell.clear();
+        const content = try self.readFile("./docs/file_system_help.txt");
+        try self.io.print(content, .Green);
+        try self.io.print("\n\n", .White);
     }
 
-    fn open(self: *FileSystem, args: []const u8) !void {
+    fn read(self: *FileSystem, args: []const u8) !void {
         var path: []const u8 = "";
         var arg_parts = std.mem.splitSequence(u8, args, " ");
 
@@ -251,7 +194,8 @@ pub const FileSystem = struct {
         }
 
         while (path.len == 0) {
-            try self.io.print("Path ⚡ ", .Green);
+            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📂 Path {s} ", .{self.config.prompt});
+            try self.io.print(msg, .Green);
             path = try self.io.readLine();
         }
 
@@ -312,12 +256,14 @@ pub const FileSystem = struct {
         }
 
         while (path.len == 0) {
-            try self.io.print("📝 Path ⚡ ", .Green);
+            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📝 Path {s} ", .{self.config.prompt});
+            try self.io.print(msg, .Green);
             path = try self.io.readLine();
         }
 
         while (editor == .Invalid) {
-            try self.io.print("📝 Editor (vim) ⚡ ", .Green);
+            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📝 Editor (vim) {s} ", .{self.config.prompt});
+            try self.io.print(msg, .Green);
             const _editor = try self.io.readLine();
             if (_editor.len == 0) editor = .Vim;
             editor = Editor.get(_editor);
@@ -327,5 +273,69 @@ pub const FileSystem = struct {
         if (file_type == .Invalid) return self.io.print("❌ Invalid File Type.\n\n", .Red);
         const abs_path: []const u8 = try getAbsPath(path);
         try Shell.openEditor(editor, abs_path);
+    }
+};
+
+pub const Editor = enum {
+    Nano,
+    Nvim,
+    Vim,
+    VsCode,
+    Invalid,
+
+    pub fn get(string: []const u8) Editor {
+        if (std.mem.eql(u8, string, "nano")) return .Nano;
+        if (std.mem.eql(u8, string, "nvim")) return .Nvim;
+        if (std.mem.eql(u8, string, "vim") or string.len == 0) return .Vim;
+        if (std.mem.eql(u8, string, "vscode") or std.mem.eql(u8, string, "code")) return .VsCode;
+        return .Invalid;
+    }
+};
+
+const FileType = enum {
+    JS,
+    JSON,
+    MD,
+    TS,
+    Txt,
+    Invalid,
+
+    fn get(path: []const u8) FileType {
+        if (path.len == 0) return .Invalid;
+
+        var path_parts = std.mem.splitSequence(u8, path, "/");
+        var file_name: []const u8 = undefined;
+        while (path_parts.next()) |part| file_name = part;
+
+        var file_name_parts = std.mem.splitSequence(u8, file_name, ".");
+        var file_type: []const u8 = "";
+        while (file_name_parts.next()) |part| file_type = part;
+
+        if (std.mem.eql(u8, file_type, "js")) return .JS;
+        if (std.mem.eql(u8, file_type, "json")) return .JSON;
+        if (std.mem.eql(u8, file_type, "md")) return .MD;
+        if (std.mem.eql(u8, file_type, "ts")) return .TS;
+        if (std.mem.eql(u8, file_type, "txt")) return .Txt;
+        return .Invalid;
+    }
+};
+
+const Fn = enum {
+    Copy,
+    Delete,
+    GetAbs,
+    Help,
+    Read,
+    Write,
+    Invalid,
+
+    fn get(string: []const u8) Fn {
+        if (std.mem.eql(u8, string, "copy") or std.mem.eql(u8, string, "-cp")) return .Copy;
+        if (std.mem.eql(u8, string, "delete") or std.mem.eql(u8, string, "-d")) return .Delete;
+        if (std.mem.eql(u8, string, "get_abs") or std.mem.eql(u8, string, "-abs")) return .GetAbs;
+        if (std.mem.eql(u8, string, "help") or std.mem.eql(u8, string, "-h")) return .Help;
+        if (std.mem.eql(u8, string, "read") or std.mem.eql(u8, string, "-r")) return .Read;
+        if (std.mem.eql(u8, string, "write") or std.mem.eql(u8, string, "-w")) return .Write;
+        return .Invalid;
     }
 };

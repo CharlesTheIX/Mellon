@@ -1,1 +1,2 @@
-INTRODUCTION
+MELLON
+Type "help" for commands. Type "exit" or ":q" to quit.

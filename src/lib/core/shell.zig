@@ -73,8 +73,8 @@ pub const Shell = struct {
         const path = try getCommandIsInPATH(command);
         if (std.mem.eql(u8, path, "")) return self.io.print("❌ Shell Command Not Found\n\n", .Red);
 
-        if (std.mem.eql(u8, command, "pwd")) return try pwd();
         if (std.mem.eql(u8, command, "clear")) return try clear();
+        if (std.mem.eql(u8, command, "pwd")) return try pwd();
 
         var count: u8 = 1;
         var arg_parts = std.mem.splitSequence(u8, args, " ");

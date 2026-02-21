@@ -1,70 +1,36 @@
 const std = @import("std");
 const History = @import("./history.zig").History;
+pub const Config = @import("./config.zig").Config;
 
 const c = @cImport({
     @cInclude("unistd.h");
     @cInclude("termios.h");
 });
 
-pub const Clr = enum {
-    Blue,
-    Cyan,
-    Green,
-    Magenta,
-    Red,
-    White,
-    Yellow,
-    Reset,
-
-    fn code(self: Clr) []const u8 {
-        return switch (self) {
-            .Blue => "\x1b[34m",
-            .Cyan => "\x1b[36m",
-            .Green => "\x1b[32m",
-            .Magenta => "\x1b[35m",
-            .Red => "\x1b[31m",
-            .White => "\x1b[37m",
-            .Yellow => "\x1b[33m",
-            .Reset => "\x1b[0m",
-        };
-    }
-};
-
 pub const IO = struct {
     len: usize = 0,
-    history: *History,
+    config: *Config,
+    history: History,
     cursor_pos: usize = 0,
     writer: *std.fs.File.Writer,
     reader: *std.fs.File.Reader,
     buffer: [1024]u8 = undefined,
 
     // Static Methods
-    pub fn init(reader: *std.fs.File.Reader, writer: *std.fs.File.Writer, history: *History) IO {
-        return IO{ .reader = reader, .writer = writer, .history = history };
+    pub fn init(allocator: std.mem.Allocator, reader: *std.fs.File.Reader, writer: *std.fs.File.Writer, config: *Config) IO {
+        const history = History.init(allocator);
+        return IO{ .reader = reader, .writer = writer, .history = history, .config = config };
     }
 
     // Instance Methods
-    pub fn deinit(self: *IO) void {
-        self.writer.interface.flush() catch {};
-    }
-
     fn clear(self: *IO) void {
         self.len = 0;
         self.cursor_pos = 0;
     }
 
-    fn insertChar(self: *IO, ch: u8) void {
-        if (self.len >= self.buffer.len - 1) return;
-        if (self.cursor_pos < self.len) {
-            std.mem.copyBackwards(
-                u8,
-                self.buffer[self.cursor_pos + 1 .. self.len + 1],
-                self.buffer[self.cursor_pos..self.len],
-            );
-        }
-        self.buffer[self.cursor_pos] = ch;
-        self.len += 1;
-        self.cursor_pos += 1;
+    pub fn deinit(self: *IO) void {
+        self.writer.interface.flush() catch {};
+        self.history.deinit();
     }
 
     fn deleteChar(self: *IO) void {
@@ -81,14 +47,34 @@ pub const IO = struct {
         }
     }
 
-    fn setContent(self: *IO, content: []const u8) void {
-        self.len = @min(content.len, self.buffer.len - 1);
-        @memcpy(self.buffer[0..self.len], content[0..self.len]);
-        self.cursor_pos = self.len;
-    }
-
     fn getSlice(self: *IO) []const u8 {
         return self.buffer[0..self.len];
+    }
+
+    fn insertChar(self: *IO, ch: u8) void {
+        if (self.len >= self.buffer.len - 1) return;
+        if (self.cursor_pos < self.len) {
+            std.mem.copyBackwards(
+                u8,
+                self.buffer[self.cursor_pos + 1 .. self.len + 1],
+                self.buffer[self.cursor_pos..self.len],
+            );
+        }
+        self.buffer[self.cursor_pos] = ch;
+        self.len += 1;
+        self.cursor_pos += 1;
+    }
+
+    fn log(self: *const Config, message: []const u8, log_name: ?[]const u8) !void {
+        if (self.log_dir.len == 0) return;
+        const timestamp = std.time.timestamp() / 1000; // seconds
+        const name = if (log_name) log_name else "log";
+        const log_path = try std.fmt.allocPrint(self.allocator, "{s}/{s}_{d}.txt", .{ self.config.log_dir, name, timestamp });
+        defer self.allocator.free(log_path);
+
+        const file = try std.fs.createFileAbsolute(log_path, .{});
+        defer file.close();
+        try file.writeAll(message);
     }
 
     pub fn print(self: *IO, msg: []const u8, clr: Clr) !void {
@@ -199,6 +185,22 @@ pub const IO = struct {
         return "";
     }
 
+    pub fn readOptions(self: *IO, prompt: []const u8, options: [][]const u8) ![]const u8 {
+        try self.print(prompt, .White);
+        try self.print("\n", .White);
+        for (options) |option| {
+            try self.print(option, .Cyan);
+            try self.print("\n", .White);
+        }
+
+        try self.print(self.config.prompt, .Green);
+        while (true) {
+            const input = try self.readLine();
+            for (options) |option| if (std.mem.eql(u8, input, option)) return option;
+            try self.print("Invalid option, try again: ", .Red);
+        }
+    }
+
     pub fn readPassword(self: *IO, prompt: []const u8) ![]const u8 {
         try self.print(prompt, .White);
         const password = try self.readLine();
@@ -209,7 +211,11 @@ pub const IO = struct {
     fn redrawInput(self: *IO) !void {
         try self.writer.interface.writeAll("\r\x1b[K");
         try self.writer.interface.writeAll(Clr.Green.code());
-        try self.writer.interface.writeAll("⚡ ");
+
+        const prompt = try self.config.getFullPrompt();
+        defer self.config.allocator.free(prompt);
+        try self.writer.interface.writeAll(prompt);
+
         try self.writer.interface.writeAll(Clr.Reset.code());
         try self.writer.interface.writeAll(self.getSlice());
 
@@ -221,5 +227,35 @@ pub const IO = struct {
             try self.writer.interface.writeAll(escape_seq);
         }
         try self.writer.interface.flush();
+    }
+
+    fn setContent(self: *IO, content: []const u8) void {
+        self.len = @min(content.len, self.buffer.len - 1);
+        @memcpy(self.buffer[0..self.len], content[0..self.len]);
+        self.cursor_pos = self.len;
+    }
+};
+
+pub const Clr = enum {
+    Blue,
+    Cyan,
+    Green,
+    Magenta,
+    Red,
+    White,
+    Yellow,
+    Reset,
+
+    fn code(self: Clr) []const u8 {
+        return switch (self) {
+            .Blue => "\x1b[34m",
+            .Cyan => "\x1b[36m",
+            .Green => "\x1b[32m",
+            .Magenta => "\x1b[35m",
+            .Red => "\x1b[31m",
+            .White => "\x1b[37m",
+            .Yellow => "\x1b[33m",
+            .Reset => "\x1b[0m",
+        };
     }
 };
