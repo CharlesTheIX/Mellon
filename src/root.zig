@@ -1,73 +1,112 @@
 const std = @import("std");
-const IO = @import("./lib/io.zig").IO;
+pub const IO = @import("./lib/io.zig").IO;
 const Shell = @import("./lib/shell.zig").Shell;
+pub const Config = @import("./lib/config.zig").Config;
 const FS = @import("./lib/file-system.zig").FileSystem;
+pub const History = @import("./lib/history.zig").History;
 
-const Command = enum { Exit, FileSystem, Help, Invalid };
+const Cmd = enum {
+    Config,
+    Exit,
+    FileSystem,
+    Help,
+    Repl,
+    Invalid,
 
-fn stringToCommand(string: []const u8) Command {
-    if (std.mem.eql(u8, string, "exit") or std.mem.eql(u8, string, ":q")) return .Exit;
-    if (std.mem.eql(u8, string, "file_system") or std.mem.eql(u8, string, "fs")) return .FileSystem;
-    if (std.mem.eql(u8, string, "help")) return .Help;
-    return .Invalid;
-}
+    fn get(string: []const u8) Cmd {
+        if (std.mem.eql(u8, string, "config")) return .Config;
+        if (std.mem.eql(u8, string, "exit") or std.mem.eql(u8, string, ":q")) return .Exit;
+        if (std.mem.eql(u8, string, "file-system") or std.mem.eql(u8, string, "fs")) return .FileSystem;
+        if (std.mem.eql(u8, string, "help")) return .Help;
+        if (std.mem.eql(u8, string, "repl")) return .Repl;
+        return .Invalid;
+    }
+};
 
 pub const Mellon = struct {
-    io: IO,
+    fs: FS,
+    io: *IO,
     shell: Shell,
-    file_system: FS,
+    config: *Config,
 
     // Static Methods
-    pub fn init(reader: *std.fs.File.Reader, writer: *std.fs.File.Writer) Mellon {
-        const io = IO.init(reader, writer);
-        const fs = FS.init(reader, writer);
-        const shell = Shell.init(reader, writer);
-        return Mellon{ .io = io, .shell = shell, .file_system = fs };
+    pub fn init(io: *IO, config: *Config) Mellon {
+        const shell = Shell.init(io);
+        const fs = FS.init(io, config);
+        return Mellon{ .io = io, .shell = shell, .fs = fs, .config = config };
     }
 
     // Instance Methods
     fn controller(self: *Mellon, cmd: []const u8, args: []const u8) !void {
-        const command = stringToCommand(cmd);
+        const command = Cmd.get(cmd);
         switch (command) {
-            .Exit => try self.exit(0),
-            .FileSystem => try self.file_system.controller(args),
-            .Help => try self.help(),
-            .Invalid => try self.shell.controller(cmd, args),
+            .Config => return try self.config.controller(args),
+            .Exit => return try self.exit(200),
+            .FileSystem => return try self.fs.controller(args),
+            .Help => return try self.help(),
+            .Repl => return,
+            .Invalid => return try self.shell.controller(cmd, args),
         }
     }
 
     pub fn deinit(self: *Mellon) void {
-        self.file_system.deinit() catch {};
-        self.shell.deinit() catch {};
-        self.io.deinit() catch {};
+        self.shell.deinit();
+        self.fs.deinit();
     }
 
     fn exit(self: *Mellon, status: u8) !void {
-        const msg = try std.fmt.allocPrint(std.heap.page_allocator, "Exiting with status: {d}\n", .{status});
-        defer std.heap.page_allocator.free(msg);
-        try self.io.print(msg, .Blue);
+        switch (status) {
+            0 => try self.io.print("✅ Exiting Successfully\n", .Green),
+            1 => try self.io.print("⚠️ Exiting with Warnings\n", .Yellow),
+            200 => {
+                try self.io.print("Goodbye! 👋\n", .Green);
+                std.process.exit(0);
+            },
+            else => {
+                const msg = try std.fmt.allocPrint(std.heap.page_allocator, "❌ Exiting with Errors (code: {d})\n", .{status});
+                defer std.heap.page_allocator.free(msg);
+                try self.io.print(msg, .Red);
+            },
+        }
         std.process.exit(status);
     }
 
     fn help(self: *Mellon) !void {
-        try self.io.print("Help:\n", .Cyan);
+        try Shell.clear();
+        const content = try self.fs.readFile("./docs/test.md");
+        try self.io.print(content, .Green);
     }
 
-    pub fn run(self: *Mellon) !void {
-        while (true) {
-            const prompt = try std.fmt.allocPrint(std.heap.page_allocator, "⚡ ", .{});
-            defer std.heap.page_allocator.free(prompt);
-            try self.io.print(prompt, .Green);
+    fn printIntro(self: *Mellon) !void {
+        try Shell.clear();
+        const content = try self.fs.readFile("./docs/test.md");
+        try self.io.print(content, .Green);
+        try self.io.print("\n\n", .White);
+    }
 
-            const line_opt = try self.io.reader.interface.takeDelimiter('\n');
-            if (line_opt == null) break;
-            const line = line_opt.?;
+    fn repl(self: *Mellon) !void {
+        if (self.config.show_intro) try self.printIntro();
+
+        while (true) {
+            try self.io.print(self.config.prompt, .Green);
+            var buffer: [1024]u8 = undefined;
+            const line = try self.io.readLineWithHistory(&buffer);
             if (line.len == 0) continue;
+            try self.io.history.add(line);
 
             var commands = std.mem.splitSequence(u8, line, " ");
             const command = commands.first();
             const args = commands.rest();
             try self.controller(command, args);
         }
+    }
+
+    pub fn run(self: *Mellon, args: []const []const u8) !void {
+        if (args.len == 0) return try self.repl();
+        const cmd = args[0];
+        if (std.mem.eql(u8, cmd, "repl")) return try self.repl();
+        const cmd_args = if (args.len > 1) try std.mem.join(std.heap.page_allocator, " ", args[1..]) else "";
+        defer if (cmd_args.len > 0) std.heap.page_allocator.free(cmd_args);
+        try self.controller(cmd, cmd_args);
     }
 };

@@ -1,0 +1,11 @@
+.git
+.gitignore
+zig-cache/
+zig-out/
+.DS_Store
+README.md
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

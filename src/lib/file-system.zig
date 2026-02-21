@@ -1,45 +1,73 @@
 const std = @import("std");
 const IO = @import("./io.zig").IO;
+const Shell = @import("./shell.zig").Shell;
+const Config = @import("./config.zig").Config;
 
-pub const Editor = enum { Invalid, Nvim, VsCode };
-const FileType = enum { Txt, MD, JSON, Invalid };
-const Function = enum { Help, Read, Write, Update, Delete, Copy, GetAbs, Invalid };
+pub const Editor = enum {
+    Nvim,
+    Vim,
+    VsCode,
+    Invalid,
 
-fn stringToEditor(string: []const u8) Editor {
-    if (std.mem.eql(u8, string, "nvim") or string.len == 0) return .Nvim;
-    if (std.mem.eql(u8, string, "vscode") or std.mem.eql(u8, string, "code")) return .VsCode;
-    return .Invalid;
-}
+    pub fn get(string: []const u8) Editor {
+        if (std.mem.eql(u8, string, "nvim")) return .Nvim;
+        if (std.mem.eql(u8, string, "vim") or string.len == 0) return .Vim;
+        if (std.mem.eql(u8, string, "vscode") or std.mem.eql(u8, string, "code")) return .VsCode;
+        return .Invalid;
+    }
+};
 
-fn stringToFileType(string: []const u8) FileType {
-    if (string.len == 0) return .Invalid;
+const FileType = enum {
+    JS,
+    JSON,
+    MD,
+    TS,
+    Txt,
+    Invalid,
 
-    var path_parts = std.mem.splitSequence(u8, string, "/");
-    var file_name: []const u8 = undefined;
-    while (path_parts.next()) |part| file_name = part;
+    fn get(path: []const u8) FileType {
+        if (path.len == 0) return .Invalid;
 
-    var file_name_parts = std.mem.splitSequence(u8, file_name, ".");
-    var file_type: []const u8 = "";
-    while (file_name_parts.next()) |part| file_type = part;
+        var path_parts = std.mem.splitSequence(u8, path, "/");
+        var file_name: []const u8 = undefined;
+        while (path_parts.next()) |part| file_name = part;
 
-    if (std.mem.eql(u8, file_type, "md")) return .MD;
-    if (std.mem.eql(u8, file_type, "txt")) return .Txt;
-    if (std.mem.eql(u8, file_type, "json")) return .JSON;
-    return .Invalid;
-}
+        var file_name_parts = std.mem.splitSequence(u8, file_name, ".");
+        var file_type: []const u8 = "";
+        while (file_name_parts.next()) |part| file_type = part;
 
-fn stringToFunction(string: []const u8) Function {
-    if (std.mem.eql(u8, string, "copy")) return .Copy;
-    if (std.mem.eql(u8, string, "delete")) return .Delete;
-    if (std.mem.eql(u8, string, "help") or std.mem.eql(u8, string, "-h")) return .Help;
-    if (std.mem.eql(u8, string, "read")) return .Read;
-    if (std.mem.eql(u8, string, "update")) return .Update;
-    if (std.mem.eql(u8, string, "write")) return .Write;
-    return .Invalid;
-}
+        if (std.mem.eql(u8, file_type, "js")) return .JS;
+        if (std.mem.eql(u8, file_type, "json")) return .JSON;
+        if (std.mem.eql(u8, file_type, "md")) return .MD;
+        if (std.mem.eql(u8, file_type, "ts")) return .TS;
+        if (std.mem.eql(u8, file_type, "txt")) return .Txt;
+        return .Invalid;
+    }
+};
+
+const Fn = enum {
+    Copy,
+    Delete,
+    GetAbs,
+    Help,
+    Read,
+    Write,
+    Invalid,
+
+    fn get(string: []const u8) Fn {
+        if (std.mem.eql(u8, string, "copy") or std.mem.eql(u8, string, "-cp")) return .Copy;
+        if (std.mem.eql(u8, string, "delete") or std.mem.eql(u8, string, "-d")) return .Delete;
+        if (std.mem.eql(u8, string, "get_abs") or std.mem.eql(u8, string, "-abs")) return .GetAbs;
+        if (std.mem.eql(u8, string, "help") or std.mem.eql(u8, string, "-h")) return .Help;
+        if (std.mem.eql(u8, string, "read") or std.mem.eql(u8, string, "-r")) return .Read;
+        if (std.mem.eql(u8, string, "write") or std.mem.eql(u8, string, "-w")) return .Write;
+        return .Invalid;
+    }
+};
 
 pub const FileSystem = struct {
-    io: IO,
+    io: *IO,
+    config: *Config,
 
     // Static Methods
     fn getAbsPath(path: []const u8) ![]const u8 {
@@ -72,18 +100,17 @@ pub const FileSystem = struct {
         return try std.fs.path.join(allocator, &[_][]const u8{ cwd, "/", path[count..] });
     }
 
-    pub fn init(reader: *std.fs.File.Reader, writer: *std.fs.File.Writer) FileSystem {
-        return FileSystem{ .io = IO.init(reader, writer) };
+    pub fn init(io: *IO, config: *Config) FileSystem {
+        return FileSystem{ .io = io, .config = config };
     }
 
     // Instances Methods
     pub fn controller(self: *FileSystem, args: []const u8) !void {
-        if (args.len == 0) return self.io.print("❌ fn required: Please use '-help' OR '-h' for help.\n", .Red);
-
+        if (args.len == 0) return try self.help();
         var arg_parts = std.mem.splitSequence(u8, args, " ");
-        const function = stringToFunction(arg_parts.first());
+        const func = Fn.get(arg_parts.first());
         const options = arg_parts.rest();
-        switch (function) {
+        switch (func) {
             .Copy => return try self.copy(options),
             .Delete => return try self.delete(options),
             .GetAbs => {
@@ -92,9 +119,8 @@ pub const FileSystem = struct {
             },
             .Help => return try self.help(),
             .Read => return try self.read(options),
-            .Update => return try self.update(options),
             .Write => return try self.write(options),
-            .Invalid => return try self.io.print("❌ Invalid fn: Please use 'help' OR '-h' for help.\n", .Red),
+            .Invalid => return try self.io.print("❌ Invalid func: Please use 'help' OR '-h' for help.\n", .Red),
         }
     }
 
@@ -115,26 +141,26 @@ pub const FileSystem = struct {
         }
 
         while (from.len == 0) {
-            try self.io.print("From ⚡ ", .Green);
+            try self.io.print("📝 From ⚡ ", .Green);
             var buffer: [1024]u8 = undefined;
             var stdin_reader = std.fs.File.stdin().readerStreaming(&buffer);
             if (try stdin_reader.interface.takeDelimiter('\n')) |line| from = line;
         }
 
         while (to.len == 0) {
-            try self.io.print("To ⚡ ", .Green);
+            try self.io.print("📝 To ⚡ ", .Green);
             var buffer: [1024]u8 = undefined;
             var stdin_reader = std.fs.File.stdin().readerStreaming(&buffer);
             if (try stdin_reader.interface.takeDelimiter('\n')) |line| to = line;
         }
 
-        const file_type = stringToFileType(from);
+        const file_type = FileType.get(from);
         if (file_type == .Invalid) return try self.io.print("❌ Invalid File Type.\n", .Red);
 
         const abs_to_path: []const u8 = try getAbsPath(to);
         const abs_from_path: []const u8 = try getAbsPath(from);
         _ = std.fs.copyFileAbsolute(abs_from_path, abs_to_path, .{}) catch {
-            return try self.io.print("File not found.\n", .Red);
+            return try self.io.print("❌ File not found.\n", .Red);
         };
 
         const msg = try std.fmt.allocPrint(
@@ -146,8 +172,8 @@ pub const FileSystem = struct {
         try self.io.print(msg, .Green);
     }
 
-    pub fn deinit(self: *FileSystem) !void {
-        try self.io.deinit();
+    pub fn deinit(self: *FileSystem) void {
+        _ = self; // Placeholder to avoid unused parameter warning
     }
 
     fn delete(self: *FileSystem, args: []const u8) !void {
@@ -165,13 +191,11 @@ pub const FileSystem = struct {
         }
 
         while (path.len == 0) {
-            try self.io.print("Path ⚡ ", .Green);
-            var buffer: [1024]u8 = undefined;
-            var stdin_reader = std.fs.File.stdin().reader(&buffer);
-            if (try stdin_reader.interface.takeDelimiter('\n')) |line| path = line;
+            try self.io.print("📝 Path ⚡ ", .Green);
+            path = try self.io.readLine();
         }
 
-        const file_type = stringToFileType(path);
+        const file_type = FileType.get(path);
         if (file_type == .Invalid) return try self.io.print("❌ Invalid File Type.\n", .Red);
 
         const abs_path: []const u8 = try getAbsPath(path);
@@ -198,10 +222,8 @@ pub const FileSystem = struct {
         }
 
         while (path.len == 0) {
-            try self.io.print("Path ⚡ ", .Green);
-            var buffer: [1024]u8 = undefined;
-            var stdin_reader = std.fs.File.stdin().reader(&buffer);
-            if (try stdin_reader.interface.takeDelimiter('\n')) |line| path = line;
+            try self.io.print("📝 Path ⚡ ", .Green);
+            path = try self.io.readLine();
         }
         const abs_path: []const u8 = try getAbsPath(path);
         return abs_path;
@@ -211,51 +233,44 @@ pub const FileSystem = struct {
         _ = self;
     }
 
-    pub fn read(self: *FileSystem, args: []const u8) !void {
-        var path: []const u8 = "";
-        var arg_parts = std.mem.splitSequence(u8, args, " ");
-
-        while (arg_parts.next()) |part| {
-            if (std.mem.eql(u8, part, "")) break;
-            if (std.mem.eql(u8, part[0..2], "--")) {
-                var key_value = std.mem.splitSequence(u8, part, "=");
-                const key = key_value.first();
-                const value = key_value.rest();
-                if (std.mem.eql(u8, key, "--path") or std.mem.eql(u8, key, "--p")) path = value;
-            } else continue;
+    pub fn readFile(self: *FileSystem, path: []const u8) ![]const u8 {
+        const file_type = FileType.get(path);
+        if (file_type == .Invalid) {
+            try self.io.print("❌ Invalid File Type.\n", .Red);
+            return "";
         }
-
-        while (path.len == 0) {
-            try self.io.print("Path ⚡ ", .Green);
-            var buffer: [1024]u8 = undefined;
-            var stdin_reader = std.fs.File.stdin().readerStreaming(&buffer);
-            if (try stdin_reader.interface.takeDelimiter('\n')) |line| path = line;
-        }
-
-        const file_type = stringToFileType(path);
-        if (file_type == .Invalid) return try self.io.print("❌ Invalid File Type.\n", .Red);
 
         const abs_path: []const u8 = try getAbsPath(path);
         var file = std.fs.openFileAbsolute(abs_path, .{ .mode = .read_only }) catch {
-            return try self.io.print("❌ File not found at path.\n", .Red);
+            try self.io.print("❌ File not found at path.\n", .Red);
+            return "";
         };
         defer file.close();
 
         const file_size = try file.getEndPos();
-        const allocator = std.heap.page_allocator;
-        const buffer = try allocator.alloc(u8, file_size);
-        defer allocator.free(buffer);
+        if (file_size == 0) return "";
+        if (file_size > 10 * 1024 * 1024) {
+            try self.io.print("❌ File is too large to read (limit: 10MB).\n", .Red);
+            return "";
+        }
 
+        const allocator = std.heap.page_allocator;
+        const buffer = allocator.alloc(u8, file_size) catch {
+            try self.io.print("❌ Failed to allocate buffer for file content.\n", .Red);
+            return "";
+        };
         const file_bytes = try file.readAll(buffer);
-        std.debug.assert(file_bytes == file_size);
-        try self.io.print(buffer, .Magenta);
-        try self.io.print("\n\n", .Magenta);
+        if (file_bytes != file_size) {
+            try self.io.print("❌ Failed to read entire file content.\n", .Red);
+            allocator.free(buffer);
+            return "";
+        }
+        return buffer[0..file_size];
     }
 
-    fn update(self: *FileSystem, args: []const u8) !void {
-        var arg_parts = std.mem.splitSequence(u8, args, " ");
+    fn read(self: *FileSystem, args: []const u8) !void {
         var path: []const u8 = "";
-        var editor = Editor.Invalid;
+        var arg_parts = std.mem.splitSequence(u8, args, " ");
 
         while (arg_parts.next()) |part| {
             if (std.mem.eql(u8, part, "")) break;
@@ -264,36 +279,22 @@ pub const FileSystem = struct {
                 const key = key_value.first();
                 const value = key_value.rest();
                 if (std.mem.eql(u8, key, "--path") or std.mem.eql(u8, key, "--p")) path = value;
-                if (std.mem.eql(u8, key, "--editor") or std.mem.eql(u8, key, "--e")) editor = stringToEditor(value);
             } else continue;
         }
 
         while (path.len == 0) {
             try self.io.print("Path ⚡ ", .Green);
-            var buffer: [1024]u8 = undefined;
-            var stdin_reader = std.fs.File.stdin().reader(&buffer);
-            if (try stdin_reader.interface.takeDelimiter('\n')) |line| path = line;
+            path = try self.io.readLine();
         }
 
-        while (editor == .Invalid) {
-            try self.io.print("Editor (nvim) ⚡ ", .Green);
-            var buffer: [1024]u8 = undefined;
-            var stdin_reader = std.fs.File.stdin().reader(&buffer);
-            if (try stdin_reader.interface.takeDelimiter('\n')) |line| {
-                if (line.len == 0) editor = .Nvim;
-            }
-        }
-
-        const file_type = stringToFileType(path);
-        if (file_type == .Invalid) return try self.io.print("❌ Invalid File Type.\n", .Red);
-        const abs_path: []const u8 = try getAbsPath(path);
-        _ = abs_path;
-        // try sc.openEditor(editor, abs_path);
+        const content = try self.readFile(path);
+        try self.io.print(content, .Magenta);
+        try self.io.print("\n\n", .Magenta);
     }
 
     fn write(self: *FileSystem, args: []const u8) !void {
         var path: []const u8 = "";
-        var editor = Editor.Invalid;
+        var editor = Editor.get(self.config.editor);
         var arg_parts = std.mem.splitSequence(u8, args, " ");
 
         while (arg_parts.next()) |part| {
@@ -303,30 +304,25 @@ pub const FileSystem = struct {
                 const key = key_value.first();
                 const value = key_value.rest();
                 if (std.mem.eql(u8, key, "--path") or std.mem.eql(u8, key, "--p")) path = value;
-                if (std.mem.eql(u8, key, "--editor") or std.mem.eql(u8, key, "--e")) editor = stringToEditor(value);
+                if (std.mem.eql(u8, key, "--editor") or std.mem.eql(u8, key, "--e")) editor = Editor.get(value);
             } else continue;
         }
 
         while (path.len == 0) {
-            try self.io.print("Path ⚡ ", .Green);
-            var buffer: [1024]u8 = undefined;
-            var stdin_reader = std.fs.File.stdin().reader(&buffer);
-            if (try stdin_reader.interface.takeDelimiter('\n')) |line| path = line;
+            try self.io.print("📝 Path ⚡ ", .Green);
+            path = try self.io.readLine();
         }
 
         while (editor == .Invalid) {
-            try self.io.print("Editor (nvim) ⚡ ", .Green);
-            var buffer: [1024]u8 = undefined;
-            var stdin_reader = std.fs.File.stdin().reader(&buffer);
-            if (try stdin_reader.interface.takeDelimiter('\n')) |line| {
-                if (line.len == 0) editor = .Nvim;
-            }
+            try self.io.print("📝 Editor (vim) ⚡ ", .Green);
+            const _editor = try self.io.readLine();
+            if (_editor.len == 0) editor = .Vim;
+            editor = Editor.get(_editor);
         }
 
-        const file_type = stringToFileType(path);
+        const file_type = FileType.get(path);
         if (file_type == .Invalid) return self.io.print("❌ Invalid File Type.\n", .Red);
         const abs_path: []const u8 = try getAbsPath(path);
-        _ = abs_path;
-        // try sc.openEditor(editor, abs_path);
+        try Shell.openEditor(editor, abs_path);
     }
 };

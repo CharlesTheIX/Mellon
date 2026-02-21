@@ -6,6 +6,7 @@
     .dependencies = .{},
     .paths = .{
         "src",
+        "docs",
         "build.zig",
         "build.zig.zon",
     },

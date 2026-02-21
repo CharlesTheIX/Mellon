@@ -4,7 +4,9 @@ A high-performance shell-like REPL application written in [Zig](https://ziglang.
 
 ## Features
 
-- **Interactive REPL**: Command-line interface with a `⚡` prompt
+- **Dual Mode Operation**: Use as a CLI tool for single commands or enter REPL mode for interactive commands
+- **Interactive REPL**: Command-line interface with a `⚡` prompt (when no arguments provided)
+- **CLI Tool**: Execute individual commands directly without entering REPL mode
 - **Shell Integration**: Execute standard shell commands directly
 - **File System Operations**: Built-in commands for reading, writing, copying, and deleting files
 - **Colored Output**: Color-coded messages for better user experience (Red, Green, Blue, Cyan, Magenta, Yellow, White)
@@ -15,6 +17,9 @@ A high-performance shell-like REPL application written in [Zig](https://ziglang.
 - [Setup](#setup)
   - [Prerequisites](#prerequisites)
   - [Building from Source](#building-from-source)
+- [Usage](#usage)
+  - [CLI Mode](#cli-mode)
+  - [REPL Mode](#repl-mode)
 - [Understanding the Project](#understanding-the-project)
   - [Project Structure](#project-structure)
   - [Architecture Overview](#architecture-overview)
@@ -65,6 +70,82 @@ The compiled binary will be available at:
 zig-out/bin/mellon
 ```
 
+## Usage
+
+### CLI Mode
+
+Use Mellon to execute single commands from your shell without entering interactive mode:
+
+```bash
+# Get current working directory
+mellon pwd
+
+# List directory contents
+mellon ls -la
+
+# Execute shell commands
+mellon whoami
+
+# Use file system operations
+mellon fs read --path=./README.md
+mellon fs write --path=./newfile.txt --editor=nvim
+mellon fs copy --from=./file1.txt --to=./file2.txt
+mellon fs delete --path=./oldfile.txt
+```
+
+CLI mode is perfect for:
+
+- Scripting and automation
+- Single command execution
+- Integration with other tools
+- Shell pipelines
+
+### REPL Mode
+
+Enter interactive mode by running Mellon without arguments:
+
+```bash
+mellon
+```
+
+You'll see the Mellon prompt:
+
+```
+Entering REPL mode. Type 'exit' or ':q' to quit.
+⚡
+```
+
+In REPL mode, execute commands interactively:
+
+```
+⚡ pwd
+/Users/davidcharles/repos/mellon
+
+⚡ ls
+build.zig               src
+build.zig.zon           zig-out
+README.md
+
+⚡ fs read --path=./README.md
+
+⚡ help
+
+⚡ exit
+Exiting with status: 0
+```
+
+Or explicitly enter REPL mode from CLI:
+
+```bash
+mellon repl
+```
+
+REPL mode is perfect for:
+
+- Interactive exploration and testing
+- Continuous command execution without restarting
+- Development and debugging workflows
+
 ## Understanding the Project
 
 ### Project Structure
@@ -88,24 +169,37 @@ mellon/
 
 ### Architecture Overview
 
-Mellon follows a modular architecture with three main components working together:
+Mellon follows a modular architecture with three main components working together. The application supports two execution modes:
 
-1. **IO Module**: Handles input/output with color support
-2. **Shell Module**: Executes shell commands transparently
-3. **FileSystem Module**: Provides file manipulation utilities
-
-The main `Mellon` struct orchestrates these components and provides the command controller that routes user input to the appropriate handler.
+**CLI Mode** (single command execution):
 
 ```
-User Input (⚡ prompt)
+$ mellon <command> [args]
         ↓
-   Mellon.run()
+   Mellon.run(args)
+        ↓
+   Mellon.controller() - Routes command
+        ↓
+   └─ Execute and exit
+```
+
+**REPL Mode** (interactive):
+
+```
+$ mellon
+        ↓
+   Mellon.run(empty args)
+        ↓
+   Mellon.repl() - Interactive loop
+        ↓
+   User Input (⚡ prompt)
         ↓
    Mellon.controller() - Routes commands
         ↓
    ├─ "exit" / ":q" → Exit program
    ├─ "file_system" / "fs" → FileSystem.controller()
    ├─ "help" → Display help
+   ├─ "repl" → Already in REPL mode
    └─ Other → Shell.controller()
 ```
 
@@ -115,14 +209,21 @@ User Input (⚡ prompt)
 
 #### 1. Main Application (`src/main.zig`)
 
-The entry point initializes the Mellon application with buffered I/O:
+The entry point initializes the Mellon application and handles command-line arguments:
 
 ```zig
 pub fn main() !void {
-    var stdin_buffer: [1024]u8 = undefined;
-    var stdout_buffer: [1024]u8 = undefined;
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+
     var mellon = Mellon.init(&stdin_reader, &stdout_writer);
-    try mellon.run();
+
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+
+    // Skip program name (args[0]) and pass remaining to run()
+    const cli_args = if (args.len > 1) args[1..] else &[_][]const u8{};
+    try mellon.run(cli_args);
 }
 ```
 
@@ -131,9 +232,16 @@ pub fn main() !void {
 The `Mellon` struct is the core orchestrator:
 
 - **`init()`**: Initializes IO, Shell, and FileSystem modules
-- **`run()`**: Main REPL loop that continuously reads and processes commands
+- **`run(args[])`**: Accepts command-line arguments; enters REPL mode if no args, otherwise executes CLI command
+- **`repl()`**: Interactive REPL loop that continuously reads and processes commands
 - **`controller()`**: Routes commands to appropriate handlers
 - **`deinit()`**: Cleanup and resource deallocation
+
+The `run()` method determines execution mode:
+
+- **No arguments**: Enters REPL mode via `repl()`
+- **"repl" command**: Explicitly enters REPL mode via `repl()`
+- **Other arguments**: Executes as CLI command and exits
 
 ### Command System
 
@@ -144,6 +252,7 @@ Mellon recognizes these built-in commands:
 | `exit`        | `:q`    | Exit the application          |
 | `file_system` | `fs`    | Access file system operations |
 | `help`        | -       | Display help information      |
+| `repl`        | -       | Enter interactive REPL mode   |
 | `(other)`     | -       | Passed to shell executor      |
 
 #### Shell Commands
@@ -163,6 +272,8 @@ davidcharles
 ```
 
 #### File System Commands
+
+_The default text editor is Vim, but you can choose Nvim or VS Code when prompted._
 
 Access file operations via `fs` or `file_system`:
 
@@ -288,71 +399,45 @@ source ~/.zshrc
 
 Aliases make it even easier to launch Mellon. Add these to your `~/.zshrc`:
 
-#### Simple Alias
+#### Simple Aliases
 
 ```bash
 # Open ~/.zshrc
 nano ~/.zshrc
 
-# Add this line
+# Add these lines
 alias mellon="/usr/local/bin/mellon"
+alias m="mellon"                    # Quick access to REPL
+alias mls="mellon ls"               # Quick ls command
+alias mpwd="mellon pwd"             # Quick pwd command
+alias mfs="mellon fs"               # Quick file system access
 
 # Reload configuration
 source ~/.zshrc
 ```
 
-#### Custom Aliases with Options
+#### Usage with Aliases
 
 ```bash
-# ~/.zshrc
+# REPL mode
+m
 
-# Direct mellon command
-alias m="mellon"
-
-# Mellon with specific working directory
-alias mdev="cd ~/repos/mellon && mellon"
-
-# Mellon for different projects
-alias mproject="cd ~/repos/my-project && mellon"
-```
-
-#### Enhanced Shell Configuration Example
-
-Here's a complete `.zshrc` configuration for Mellon:
-
-```bash
-# ~/.zshrc
-
-# ... other zsh configuration ...
-
-# === Mellon Configuration ===
-
-# Add Mellon binary to PATH
-export PATH="/usr/local/bin:$PATH"
-
-# Mellon aliases
-alias m="mellon"           # Quick launch
-alias mel="mellon"         # Full name
-alias mdev="mellon"        # Development instance
-
-# Optional: Color prompt in mellon
-alias mellon="/usr/local/bin/mellon && echo '✨ Mellon closed'"
-
-# ... rest of zsh configuration ...
+# CLI mode with aliases
+mls -la
+mpwd
+mfs read --path=./README.md
 ```
 
 ### Running Mellon
 
-After setup, simply type:
+After setup, you can use Mellon in two ways:
+
+#### Interactive REPL Mode
+
+Simply type `mellon` with no arguments:
 
 ```bash
 mellon
-```
-
-Or use your alias:
-
-```bash
-m
 ```
 
 You'll see the Mellon prompt:
@@ -376,6 +461,32 @@ README.md
 
 ⚡ exit
 Exiting with status: 0
+```
+
+#### CLI Command Mode
+
+Execute commands directly without entering REPL:
+
+```bash
+mellon pwd
+/Users/davidcharles/repos/mellon
+
+mellon ls -la
+total 32
+drwxr-xr-x  7 user  group  224 Feb 21 10:30 .
+drwxr-xr-x  3 user  group   96 Feb 21 09:15 ..
+...
+
+mellon fs read --path=./README.md
+[file contents]
+```
+
+Use your alias for quick access:
+
+```bash
+m pwd
+m ls
+m fs read --path=./file.txt
 ```
 
 ## Development

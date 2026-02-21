@@ -1,15 +1,16 @@
 const std = @import("std");
 const IO = @import("./io.zig").IO;
+const Editor = @import("./file-system.zig").Editor;
 
 pub const Shell = struct {
-    io: IO,
+    io: *IO,
 
     // Static Methods
-    pub fn init(reader: *std.fs.File.Reader, writer: *std.fs.File.Writer) Shell {
-        return Shell{ .io = IO.init(reader, writer) };
+    pub fn init(io: *IO) Shell {
+        return Shell{ .io = io };
     }
 
-    fn clear() !void {
+    pub fn clear() !void {
         const allocator = std.heap.page_allocator;
         const args_array = &[1][]const u8{"clear"};
         var child_process = std.process.Child.init(args_array, allocator);
@@ -46,6 +47,18 @@ pub const Shell = struct {
         }
 
         return return_value;
+    }
+
+    pub fn openEditor(editor: Editor, path: []const u8) !void {
+        var args_array = &[2][]const u8{ "vim", path };
+        switch (editor) {
+            .Nvim => args_array = &[2][]const u8{ "nvim", path },
+            .VsCode => args_array = &[2][]const u8{ "code", path },
+            else => {},
+        }
+        const allocator = std.heap.page_allocator;
+        var child_process = std.process.Child.init(args_array, allocator);
+        _ = try child_process.spawnAndWait();
     }
 
     fn pwd() !void {
@@ -86,19 +99,7 @@ pub const Shell = struct {
         _ = try child_process.spawnAndWait();
     }
 
-    pub fn deinit(self: *Shell) !void {
-        try self.io.deinit();
-    }
-
-    pub fn openEditor(self: *Shell, editor: .Editor, path: []const u8) !void {
-        var args_array = &[2][]const u8{ "nvim", path };
-        switch (editor) {
-            .Nvim => {},
-            .VsCode => args_array = &[2][]const u8{ "code", path },
-            else => return try self.io.print("❌ Invalid Editor.\n", .Red),
-        }
-        const allocator = std.heap.page_allocator;
-        var child_process = std.process.Child.init(args_array, allocator);
-        _ = try child_process.spawnAndWait();
+    pub fn deinit(self: *Shell) void {
+        _ = self; // Placeholder to avoid unused parameter warning
     }
 };
