@@ -2,56 +2,66 @@ const std = @import("std");
 const rl = @import("raylib");
 const Map = @import("./map.zig").Map;
 const IO = @import("../core/io.zig").IO;
+const Canvas = @import("./canvas.zig").Canvas;
 const Config = @import("../core/config.zig").Config;
+const IH = @import("./input-handler.zig").InputHandler;
 const FS = @import("../core/file-system.zig").FileSystem;
 
 pub const NaseLaska = struct {
     fs: FS,
     io: IO,
+    ih: IH,
     map: Map,
+    canvas: Canvas,
     config: Config,
 
     // Static Methods
     pub fn init(allocator: std.mem.Allocator) NaseLaska {
-        var config = Config.init(allocator);
-        defer config.deinit();
-
         var stdin_buffer: [1024]u8 = undefined;
         var stdout_buffer: [1024]u8 = undefined;
         var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
         var stdin_reader = std.fs.File.stdin().readerStreaming(&stdin_buffer);
-        var io = IO.init(allocator, &stdin_reader, &stdout_writer, &config);
-        defer io.deinit();
 
+        var config = Config.init(allocator);
+        const ih = IH.init(allocator);
+        const canvas = Canvas.init(800, 600);
+        var io = IO.init(allocator, &stdin_reader, &stdout_writer, &config);
         var fs = FS.init(&io, &config);
         const map = Map.init(&fs);
-        return NaseLaska{ .io = io, .map = map, .config = config, .fs = fs };
+        return NaseLaska{
+            .io = io,
+            .map = map,
+            .fs = fs,
+            .ih = ih,
+            .canvas = canvas,
+            .config = config,
+        };
     }
 
     // Instance Methods
     pub fn deinit(self: *NaseLaska) void {
-        self.io.deinit();
         self.fs.deinit();
+        self.ih.deinit();
+        self.io.deinit();
+        self.canvas.deinit();
         self.config.deinit();
     }
 
     fn draw(self: *NaseLaska) void {
-        const alloc = std.heap.page_allocator;
-        const text = std.fmt.allocPrint(alloc, "Name: {s}\nAge: {d}", .{ self.map.name, self.map.age }) catch "Error";
-        defer alloc.free(text);
-        const text_z = alloc.allocSentinel(u8, text.len, 0) catch return;
-        @memcpy(text_z, text);
-        rl.drawText(text_z, 190, 200, 20, rl.Color.black);
+        self.map.draw(self.canvas.rect);
+        self.ih.draw();
     }
 
     pub fn mainLoop(self: *NaseLaska) !void {
-        self.map.load("test") catch return;
         rl.setTargetFPS(60);
-        rl.initWindow(800, 600, "Naše Láska");
+        rl.initWindow(@intFromFloat(self.canvas.rect.width), @intFromFloat(self.canvas.rect.height), "Naše Láska");
         defer rl.closeWindow();
+
+        self.map.load("test") catch return;
+
         while (!rl.windowShouldClose()) {
             rl.beginDrawing();
-            rl.clearBackground(rl.Color.white);
+            rl.clearBackground(rl.Color.black);
             self.update();
             self.draw();
             rl.endDrawing();
@@ -60,16 +70,7 @@ pub const NaseLaska = struct {
     }
 
     fn update(self: *NaseLaska) void {
-        _ = self;
-    }
-};
-
-const DataType = enum {
-    Map,
-    Invalid,
-
-    pub fn get(string: []const u8) DataType {
-        if (std.mem.eql(u8, string, "map")) return .Map;
-        return .Invalid;
+        self.ih.update();
+        self.map.update();
     }
 };
