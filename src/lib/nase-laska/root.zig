@@ -2,7 +2,6 @@ const std = @import("std");
 const rl = @import("raylib");
 const Map = @import("./lib/map.zig").Map;
 const Dev = @import("./lib/.dev.zig").Dev;
-const Timer = @import("./lib/timer.zig").Timer;
 const Canvas = @import("./lib/canvas.zig").Canvas;
 const Camera = @import("./lib/camera.zig").Camera;
 const Key = @import("./lib/input-handler.zig").Key;
@@ -13,8 +12,7 @@ pub const NaseLaska = struct {
     map: Map,
     canvas: Canvas,
     camera: Camera,
-
-    timer: Timer,
+    dev: Dev,
 
     // Static Methods
     pub fn init(allocator: std.mem.Allocator) NaseLaska {
@@ -27,8 +25,7 @@ pub const NaseLaska = struct {
             .ih = ih,
             .canvas = canvas,
             .camera = camera,
-
-            .timer = Timer.init(1000_000_000), // 1 second in nanoseconds
+            .dev = Dev.init(),
         };
     }
 
@@ -42,9 +39,11 @@ pub const NaseLaska = struct {
 
     fn draw(self: *NaseLaska) void {
         rl.beginMode2D(self.camera.camera);
-        self.map.drawWorld();
+        self.map.draw();
         rl.endMode2D();
         self.ih.draw();
+
+        self.dev.draw();
     }
 
     pub fn mainLoop(self: *NaseLaska) !void {
@@ -66,8 +65,9 @@ pub const NaseLaska = struct {
 
     fn update(self: *NaseLaska) void {
         self.ih.update();
-        // self.camera.update(&self.ih);
         self.camera.update();
         self.map.update();
+
+        self.dev.update();
     }
 };
