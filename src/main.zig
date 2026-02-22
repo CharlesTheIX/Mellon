@@ -14,6 +14,7 @@ pub fn main() !void {
     const cli_args = if (args.len > 1) args[1..] else &[_][]const u8{}; // Skip the program name (args[0])
     if (args.len > 1 and std.mem.eql(u8, args[1], "nase-laska")) {
         var nase_laska = NaseLaska.init(allocator);
+        defer nase_laska.deinit();
         nase_laska.mainLoop() catch std.debug.print("❌ NaseLaska failed\n\n", .Red);
         return std.process.exit(0);
     }
@@ -29,6 +30,7 @@ pub fn main() !void {
     defer io.deinit();
 
     var mellon = Mellon.init(&io, &config);
+    // var mellon = Mellon.init(allocator);
     defer mellon.deinit();
     return try mellon.run(cli_args);
 }

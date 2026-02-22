@@ -29,30 +29,38 @@ pub const NaseLaska = struct {
     }
 
     // Instance Methods
+    pub fn deinit(self: *NaseLaska) void {
+        self.io.deinit();
+        self.fs.deinit();
+        self.config.deinit();
+    }
+
+    fn draw(self: *NaseLaska) void {
+        const alloc = std.heap.page_allocator;
+        const text = std.fmt.allocPrint(alloc, "Name: {s}\nAge: {d}", .{ self.map.name, self.map.age }) catch "Error";
+        defer alloc.free(text);
+        const text_z = alloc.allocSentinel(u8, text.len, 0) catch return;
+        @memcpy(text_z, text);
+        rl.drawText(text_z, 190, 200, 20, rl.Color.black);
+    }
+
     pub fn mainLoop(self: *NaseLaska) !void {
         self.map.load("test") catch return;
-
         rl.setTargetFPS(60);
         rl.initWindow(800, 600, "Naše Láska");
         defer rl.closeWindow();
-
-        const alloc = std.heap.page_allocator;
-        const text = std.fmt.allocPrint(alloc, "Name: {s}", .{self.map.name}) catch "Error";
-        defer alloc.free(text);
-        
-        const text_z = try alloc.allocSentinel(u8, text.len, 0);
-        @memcpy(text_z, text);
-
         while (!rl.windowShouldClose()) {
             rl.beginDrawing();
             rl.clearBackground(rl.Color.white);
-
-            rl.drawText(text_z, 190, 200, 20, rl.Color.black);
-
+            self.update();
+            self.draw();
             rl.endDrawing();
         }
+        return std.process.exit(0);
+    }
 
-        std.process.exit(0);
+    fn update(self: *NaseLaska) void {
+        _ = self;
     }
 };
 
