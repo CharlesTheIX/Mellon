@@ -40,6 +40,7 @@ A high-performance shell-like REPL application written in [Zig](https://ziglang.
 
 - **Zig** (v0.15.2 or later) - [Download Zig](https://ziglang.org/download/)
 - **macOS** (or compatible Unix-like system)
+- **raylib** dependencies (automatically fetched by Zig build system)
 
 Verify your Zig installation:
 
@@ -157,6 +158,27 @@ REPL mode is perfect for:
 - Continuous command execution without restarting
 - Development and debugging workflows
 
+### NaseLaska Mode (Experimental)
+
+Mellon includes an experimental game/GUI feature called "NaseLaska" built with raylib. This is a separate interactive mode that demonstrates Zig's graphics capabilities.
+
+To launch NaseLaska mode:
+
+```bash
+mellon nase-laska
+```
+
+This opens a GUI window (800x600) running at 60 FPS. The mode loads map data from `.test-data/` directory and provides a graphical interface separate from the shell REPL.
+
+**Features:**
+
+- Raylib-based GUI window
+- Map data persistence (`.z` format files)
+- 60 FPS rendering loop
+- Press ESC or close window to exit
+
+**Note:** NaseLaska is an experimental feature and requires raylib dependencies (automatically handled by the build system).
+
 ## Understanding the Project
 
 ### Project Structure
@@ -173,11 +195,15 @@ mellon/
 │   ├── main.zig           # Application entry point
 │   ├── root.zig           # Main Mellon struct and command controller
 │   └── lib/
-│       ├── config.zig      # Config handling and .mellonrc parsing
-│       ├── history.zig     # Persistent REPL history (~/.mellon_history)
-│       ├── io.zig         # Input/Output and colored text handling
-│       ├── shell.zig      # Shell command execution
-│       └── file-system.zig # File operations (read, write, copy, delete)
+│       ├── core/
+│       │   ├── config.zig      # Config handling and .mellonrc parsing
+│       │   ├── history.zig     # Persistent REPL history (~/.mellon_history)
+│       │   ├── io.zig         # Input/Output and colored text handling
+│       │   ├── shell.zig      # Shell command execution
+│       │   └── file-system.zig # File operations (read, write, copy, delete)
+│       └── nase-laska/
+│           ├── root.zig        # NaseLaska game engine
+│           └── map.zig         # Game map data and persistence
 ├── zig-out/
 │   └── bin/
 │       └── mellon         # Compiled executable
@@ -232,29 +258,33 @@ The entry point initializes the Mellon application and handles command-line argu
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
-     defer _ = gpa.deinit();
-
-     var config = Config.init(allocator);
-     defer config.deinit();
-
-     var stdin_buffer: [1024]u8 = undefined;
-     var stdout_buffer: [1024]u8 = undefined;
-     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-     var stdin_reader = std.fs.File.stdin().readerStreaming(&stdin_buffer);
-     var io = IO.init(allocator, &stdin_reader, &stdout_writer, &config);
-     defer io.deinit();
-
-     var mellon = Mellon.init(&io, &config);
-     defer mellon.deinit();
+    defer _ = gpa.deinit();
 
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
-
-    // Skip program name (args[0]) and pass remaining to run()
     const cli_args = if (args.len > 1) args[1..] else &[_][]const u8{};
-     const password = try io.readPassword("PASSWORD: ");
-     if (std.mem.eql(u8, password, pwd)) return try mellon.run(cli_args);
-     return try io.print("PASSWORD INCORRECT\n\n", .Red);
+
+    // Special mode: NaseLaska game
+    if (args.len > 1 and std.mem.eql(u8, args[1], "nase-laska")) {
+        var nase_laska = NaseLaska.init(allocator);
+        defer nase_laska.deinit();
+        nase_laska.mainLoop() catch std.debug.print("❌ NaseLaska failed\n\n", .{});
+        return std.process.exit(0);
+    }
+
+    var config = Config.init(allocator);
+    defer config.deinit();
+
+    var stdin_buffer: [1024]u8 = undefined;
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    var stdin_reader = std.fs.File.stdin().readerStreaming(&stdin_buffer);
+    var io = IO.init(allocator, &stdin_reader, &stdout_writer, &config);
+    defer io.deinit();
+
+    var mellon = Mellon.init(&io, &config);
+    defer mellon.deinit();
+    return try mellon.run(cli_args);
 }
 ```
 
@@ -286,6 +316,7 @@ Mellon recognizes these built-in commands:
 | `config`      | -       | Configure prompt/editor/intro |
 | `help`        | -       | Display help information      |
 | `repl`        | -       | Enter interactive REPL mode   |
+| `nase-laska`  | -       | Launch NaseLaska GUI mode     |
 | `(other)`     | -       | Passed to shell executor      |
 
 `help` prints the contents of `docs/help.txt`.

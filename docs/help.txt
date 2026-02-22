@@ -9,6 +9,7 @@ BUILT-IN
 	help                 Show this help
 	exit | :q            Exit
 	repl                 Enter REPL
+	nase-laska           Launch NaseLaska GUI
 	config               Edit config in editor
 	config set k=v [...] Set config keys
 	config source        Reload config
@@ -31,3 +32,8 @@ TIPS
 	Unrecognized commands go to the shell.
 	Benchmark prints elapsed time.
 	Arrow keys navigate history.
+
+NASE-LASKA
+	Experimental GUI mode built with raylib.
+	Run: mellon nase-laska
+	Opens 800x600 window for game/GUI interaction.

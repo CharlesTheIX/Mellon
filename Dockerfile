@@ -13,6 +13,7 @@ RUN curl -L https://ziglang.org/download/0.15.2/zig-linux-x86_64-0.15.2.tar.xz |
 WORKDIR /build
 COPY build.zig build.zig.zon ./
 COPY src ./src
+COPY docs ./docs
 
 # Build the project
 RUN zig build -Doptimize=ReleaseSafe
@@ -27,6 +28,9 @@ RUN apt-get update && apt-get install -y \
 
 # Copy the built binary from builder stage
 COPY --from=builder /build/zig-out/bin/mellon /usr/local/bin/mellon
+
+# Copy docs for help and intro commands
+COPY --from=builder /build/docs /docs
 
 # Add binary to PATH
 ENV PATH="/usr/local/bin:${PATH}"
