@@ -14,14 +14,6 @@ pub const Mellon = struct {
 
     // Static Methods
     pub fn init(io: *IO, config: *Config) Mellon {
-        // pub fn init(allocator: std.mem.Allocator) Mellon {
-        // var stdin_buffer: [1024]u8 = undefined;
-        // var stdout_buffer: [1024]u8 = undefined;
-        // var config = Config.init(allocator);
-        // var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-        // var stdin_reader = std.fs.File.stdin().readerStreaming(&stdin_buffer);
-        // var io = IO.init(allocator, &stdin_reader, &stdout_writer, &config);
-
         const shell = Shell.init(io);
         const fs = FS.init(io, config);
         return Mellon{ .io = io, .shell = shell, .fs = fs, .config = config };

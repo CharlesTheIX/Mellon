@@ -30,7 +30,6 @@ pub fn main() !void {
     defer io.deinit();
 
     var mellon = Mellon.init(&io, &config);
-    // var mellon = Mellon.init(allocator);
     defer mellon.deinit();
     return try mellon.run(cli_args);
 }
