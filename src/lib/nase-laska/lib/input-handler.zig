@@ -37,21 +37,27 @@ pub const InputHandler = struct {
         // Ensure null-termination
         if (pos < buffer.len) buffer[pos] = 0;
 
-        rl.drawText("Active Keys:", 10, 10, 20, rl.Color.white);
+        rl.drawText("Active Keys:", 10, 10, 16, rl.Color.white);
         const str: [:0]const u8 = buffer[0..pos :0];
-        rl.drawText(str, 10, 40, 20, rl.Color.white);
+        rl.drawText(str, 10, 40, 16, rl.Color.white);
+    }
+
+    pub fn keysActive(self: *InputHandler, keys: []const Key, filter: enum { And, Or }) bool {
+        for (keys) |key| {
+            if (self.active_keys.get(key) == null) return filter == .Or;
+        }
+        return filter == .And;
     }
 
     pub fn update(self: *InputHandler) void {
         self.active_keys.clearRetainingCapacity();
-        // Check common keyboard keys manually
         for (Key.array()) |key| {
             if (rl.isKeyDown(key.toKeyboardKey())) _ = self.active_keys.put(key, {}) catch {};
         }
     }
 };
 
-const Key = enum {
+pub const Key = enum {
     W,
     A,
     S,
@@ -63,12 +69,12 @@ const Key = enum {
     Space,
     Enter,
     Escape,
+    LeftAlt,
+    RightAlt,
     LeftShift,
     RightShift,
     LeftControl,
     RightControl,
-    LeftAlt,
-    RightAlt,
 
     pub fn toString(self: Key) []const u8 {
         return switch (self) {
@@ -83,21 +89,21 @@ const Key = enum {
             .Space => "Space",
             .Enter => "Enter",
             .Escape => "Escape",
+            .LeftAlt => "LeftAlt",
+            .RightAlt => "RightAlt",
             .LeftShift => "LeftShift",
             .RightShift => "RightShift",
             .LeftControl => "LeftControl",
             .RightControl => "RightControl",
-            .LeftAlt => "LeftAlt",
-            .RightAlt => "RightAlt",
         };
     }
 
     pub fn toKeyboardKey(self: Key) rl.KeyboardKey {
         return switch (self) {
-            .W => rl.KeyboardKey.a,
-            .A => rl.KeyboardKey.d,
-            .S => rl.KeyboardKey.w,
-            .D => rl.KeyboardKey.s,
+            .W => rl.KeyboardKey.w,
+            .A => rl.KeyboardKey.a,
+            .S => rl.KeyboardKey.s,
+            .D => rl.KeyboardKey.d,
             .Up => rl.KeyboardKey.up,
             .Down => rl.KeyboardKey.down,
             .Left => rl.KeyboardKey.left,
@@ -105,12 +111,12 @@ const Key = enum {
             .Space => rl.KeyboardKey.space,
             .Enter => rl.KeyboardKey.enter,
             .Escape => rl.KeyboardKey.escape,
+            .LeftAlt => rl.KeyboardKey.left_alt,
+            .RightAlt => rl.KeyboardKey.right_alt,
             .LeftShift => rl.KeyboardKey.left_shift,
             .RightShift => rl.KeyboardKey.right_shift,
             .LeftControl => rl.KeyboardKey.left_control,
             .RightControl => rl.KeyboardKey.right_control,
-            .LeftAlt => rl.KeyboardKey.left_alt,
-            .RightAlt => rl.KeyboardKey.right_alt,
         };
     }
 

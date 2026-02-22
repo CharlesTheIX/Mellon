@@ -1,50 +1,37 @@
 const std = @import("std");
 const rl = @import("raylib");
-const Map = @import("./map.zig").Map;
-const IO = @import("../core/io.zig").IO;
-const Canvas = @import("./canvas.zig").Canvas;
-const Config = @import("../core/config.zig").Config;
-const IH = @import("./input-handler.zig").InputHandler;
-const FS = @import("../core/file-system.zig").FileSystem;
+const Map = @import("./lib/map.zig").Map;
+const Timer = @import("./lib/timer.zig").Timer;
+const Canvas = @import("./lib/canvas.zig").Canvas;
+const Key = @import("./lib/input-handler.zig").Key;
+const IH = @import("./lib/input-handler.zig").InputHandler;
 
 pub const NaseLaska = struct {
-    fs: FS,
-    io: IO,
     ih: IH,
     map: Map,
     canvas: Canvas,
-    config: Config,
+
+    timer: Timer,
 
     // Static Methods
     pub fn init(allocator: std.mem.Allocator) NaseLaska {
-        var stdin_buffer: [1024]u8 = undefined;
-        var stdout_buffer: [1024]u8 = undefined;
-        var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-        var stdin_reader = std.fs.File.stdin().readerStreaming(&stdin_buffer);
-
-        var config = Config.init(allocator);
         const ih = IH.init(allocator);
         const canvas = Canvas.init(800, 600);
-        var io = IO.init(allocator, &stdin_reader, &stdout_writer, &config);
-        var fs = FS.init(&io, &config);
-        const map = Map.init(&fs);
+        const map = Map.init(allocator);
         return NaseLaska{
-            .io = io,
             .map = map,
-            .fs = fs,
             .ih = ih,
             .canvas = canvas,
-            .config = config,
+
+            .timer = Timer.init(1000_000_000), // 1 second in nanoseconds
         };
     }
 
     // Instance Methods
     pub fn deinit(self: *NaseLaska) void {
-        self.fs.deinit();
         self.ih.deinit();
-        self.io.deinit();
+        self.map.deinit();
         self.canvas.deinit();
-        self.config.deinit();
     }
 
     fn draw(self: *NaseLaska) void {
@@ -71,6 +58,30 @@ pub const NaseLaska = struct {
 
     fn update(self: *NaseLaska) void {
         self.ih.update();
+
+        self.timer.update();
+        if (self.timer.state == .Finished or self.timer.state == .Ready) {
+            if (self.ih.keysActive(&[_]Key{ .LeftShift, .A }, .And) and !std.mem.eql(u8, self.map.id, "test_2")) {
+                self.timer.start();
+                self.map.load("test_2") catch {};
+            }
+
+            if (self.ih.keysActive(&[_]Key{ .LeftShift, .D }, .And) and !std.mem.eql(u8, self.map.id, "test")) {
+                self.timer.start();
+                self.map.load("test") catch {};
+            }
+
+            if (self.ih.keysActive(&[_]Key{ .LeftShift, .W }, .And) and !std.mem.eql(u8, self.map.id, "test_3")) {
+                self.timer.start();
+                self.map.load("test_3") catch {};
+            }
+
+            if (self.ih.keysActive(&[_]Key{ .LeftShift, .S }, .And) and !std.mem.eql(u8, self.map.id, "test_4")) {
+                self.timer.start();
+                self.map.load("test_4") catch {};
+            }
+        }
+
         self.map.update();
     }
 };
