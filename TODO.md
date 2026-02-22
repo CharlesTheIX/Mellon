@@ -24,10 +24,11 @@
 
 ### Performance
 
-- [ ] **Command History Persistence**: Save history to `~/.mellon_history`
+- [x] **Command History Persistence**: Save history to `~/.mellon_history` ✅
   - Load on startup
-  - Save on exit
-  - Configurable history size limit
+  - Save on exit and after each command
+  - Configurable history size limit (default: 1000)
+  - Automatic deduplication
 
 - [ ] **Lazy Loading**: Defer module initialization until first use
   - Faster startup time

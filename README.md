@@ -10,8 +10,9 @@ A high-performance shell-like REPL application written in [Zig](https://ziglang.
 - **Shell Integration**: Execute standard shell commands directly
 - **File System Operations**: Built-in commands for reading, writing, copying, and deleting files
 - **Configurable Runtime**: `config` command and `~/.mellonrc` support for editor, prompt, and intro display
-- **Command History**: Arrow-key navigation in REPL input
+- **Command History**: Arrow-key navigation in REPL with persistent history saved to `~/.mellon_history`
 - **Colored Output**: Color-coded messages for better user experience (Red, Green, Blue, Cyan, Magenta, Yellow, White)
+- **Performance Benchmarking**: Built-in `benchmark` command to time command execution
 
 ## Table of Contents
 
@@ -173,7 +174,7 @@ mellon/
 │   ├── root.zig           # Main Mellon struct and command controller
 │   └── lib/
 │       ├── config.zig      # Config handling and .mellonrc parsing
-│       ├── history.zig     # In-memory REPL history
+│       ├── history.zig     # Persistent REPL history (~/.mellon_history)
 │       ├── io.zig         # Input/Output and colored text handling
 │       ├── shell.zig      # Shell command execution
 │       └── file-system.zig # File operations (read, write, copy, delete)
@@ -345,6 +346,23 @@ Example usage:
 try io.print("✅ Success!", .Green);
 try io.print("❌ Error!", .Red);
 ```
+
+#### History Module (`src/lib/core/history.zig`)
+
+Manages command history with persistent storage:
+
+- **Persistent Storage**: Automatically saves to `~/.mellon_history`
+- **Arrow Navigation**: Use ↑/↓ to navigate through previous commands
+- **Deduplication**: Consecutive duplicate commands are not stored
+- **Size Limit**: Default maximum of 1000 commands (configurable)
+- **Auto-save**: History is saved after each command for durability
+
+History features:
+
+- Loads on startup from `~/.mellon_history`
+- Saves on exit and after each command
+- Trims old entries when max size is reached
+- Preserves history across sessions
 
 #### Shell Module (`src/lib/shell.zig`)
 

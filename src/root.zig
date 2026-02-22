@@ -4,7 +4,7 @@ const Shell = @import("./lib/core/shell.zig").Shell;
 pub const Config = @import("./lib/core/config.zig").Config;
 const FS = @import("./lib/core/file-system.zig").FileSystem;
 
-const naseLaska = @import("./lib/nase-laska/game.zig").naseLaska;
+pub const NaseLaska = @import("./lib/nase-laska/root.zig").NaseLaska;
 
 pub const Mellon = struct {
     fs: FS,
@@ -45,12 +45,11 @@ pub const Mellon = struct {
     fn controller(self: *Mellon, cmd: []const u8, args: []const u8) !void {
         const command = Cmd.get(cmd);
         switch (command) {
-            .Benchmark => return benchmark(self, args) catch return try self.io.print("❌ Benchmark failed\n\n", .Red),
+            .Benchmark => return try benchmark(self, args),
             .Config => return try self.config.controller(args),
             .Exit => return try self.exit(200),
             .FileSystem => return try self.fs.controller(args),
             .Help => return try self.help(),
-            .NaseLaska => return try naseLaska(),
             .Repl => return,
             .Invalid => return try self.shell.controller(cmd, args),
         }
@@ -127,7 +126,6 @@ const Cmd = enum {
     Exit,
     FileSystem,
     Help,
-    NaseLaska,
     Repl,
     Invalid,
 
@@ -137,7 +135,6 @@ const Cmd = enum {
         if (std.mem.eql(u8, string, "exit") or std.mem.eql(u8, string, ":q")) return .Exit;
         if (std.mem.eql(u8, string, "file-system") or std.mem.eql(u8, string, "fs")) return .FileSystem;
         if (std.mem.eql(u8, string, "help")) return .Help;
-        if (std.mem.eql(u8, string, "nase-laska")) return .NaseLaska;
         if (std.mem.eql(u8, string, "repl")) return .Repl;
         return .Invalid;
     }

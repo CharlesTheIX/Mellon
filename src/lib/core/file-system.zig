@@ -207,13 +207,13 @@ pub const FileSystem = struct {
     pub fn readFile(self: *FileSystem, path: []const u8) ![]const u8 {
         const file_type = FileType.get(path);
         if (file_type == .Invalid) {
-            try self.io.print("❌ Invalid File Type.\n\n", .Red);
+            self.io.print("❌ Invalid File Type.\n\n", .Red) catch {};
             return "";
         }
 
         const abs_path: []const u8 = try getAbsPath(path);
         var file = std.fs.openFileAbsolute(abs_path, .{ .mode = .read_only }) catch {
-            try self.io.print("❌ File not found at path.\n\n", .Red);
+            self.io.print("❌ File not found at path.\n\n", .Red) catch {};
             return "";
         };
         defer file.close();
@@ -221,18 +221,18 @@ pub const FileSystem = struct {
         const file_size = try file.getEndPos();
         if (file_size == 0) return "";
         if (file_size > 10 * 1024 * 1024) {
-            try self.io.print("❌ File is too large to read (limit: 10MB).\n\n", .Red);
+            self.io.print("❌ File is too large to read (limit: 10MB).\n\n", .Red) catch {};
             return "";
         }
 
         const allocator = std.heap.page_allocator;
         const buffer = allocator.alloc(u8, file_size) catch {
-            try self.io.print("❌ Failed to allocate buffer for file content.\n\n", .Red);
+            self.io.print("❌ Failed to allocate buffer for file content.\n\n", .Red) catch {};
             return "";
         };
         const file_bytes = try file.readAll(buffer);
         if (file_bytes != file_size) {
-            try self.io.print("❌ Failed to read entire file content.\n\n", .Red);
+            self.io.print("❌ Failed to read entire file content.\n\n", .Red) catch {};
             allocator.free(buffer);
             return "";
         }
@@ -298,6 +298,7 @@ const FileType = enum {
     MD,
     TS,
     Txt,
+    Z,
     Invalid,
 
     fn get(path: []const u8) FileType {
@@ -316,6 +317,7 @@ const FileType = enum {
         if (std.mem.eql(u8, file_type, "md")) return .MD;
         if (std.mem.eql(u8, file_type, "ts")) return .TS;
         if (std.mem.eql(u8, file_type, "txt")) return .Txt;
+        if (std.mem.eql(u8, file_type, "z")) return .Z;
         return .Invalid;
     }
 };

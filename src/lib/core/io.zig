@@ -201,13 +201,6 @@ pub const IO = struct {
         }
     }
 
-    pub fn readPassword(self: *IO, prompt: []const u8) ![]const u8 {
-        try self.print(prompt, .White);
-        const password = try self.readLine();
-        try self.writer.interface.flush();
-        return password;
-    }
-
     fn redrawInput(self: *IO) !void {
         try self.writer.interface.writeAll("\r\x1b[K");
         try self.writer.interface.writeAll(Clr.Green.code());

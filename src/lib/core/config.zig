@@ -14,8 +14,8 @@ pub const Config = struct {
     // Static Methods
     pub fn init(allocator: std.mem.Allocator) Config {
         const home = std.posix.getenv("HOME") orelse "~";
-        const log_dir = std.fmt.allocPrint(allocator, "{s}/.mellon_logs", .{home}) catch "";
-        const config_path = std.fmt.allocPrint(allocator, "{s}/.mellonrc", .{home}) catch "";
+        const log_dir = std.fmt.allocPrint(allocator, "{s}/.mellon_logs", .{home}) catch allocator.dupe(u8, "") catch "";
+        const config_path = std.fmt.allocPrint(allocator, "{s}/.mellonrc", .{home}) catch allocator.dupe(u8, "") catch "";
         const default_editor = allocator.dupe(u8, "vim") catch "vim";
         const default_prompt = allocator.dupe(u8, "⚡") catch "⚡";
         var config = Config{
@@ -56,6 +56,7 @@ pub const Config = struct {
         self.allocator.free(self.editor);
         self.allocator.free(self.prompt);
         if (self.config_path.len > 0) self.allocator.free(self.config_path);
+        if (self.log_dir.len > 0) self.allocator.free(self.log_dir);
     }
 
     fn edit(self: *Config) !void {
