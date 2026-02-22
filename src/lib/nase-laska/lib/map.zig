@@ -1,6 +1,6 @@
 const std = @import("std");
 const rl = @import("raylib");
-const readFile = @import("../utils.zig").readFile;
+const readFile = @import("./utils.zig").readFile;
 
 pub const Map = struct {
     id: []const u8 = "",
@@ -17,18 +17,34 @@ pub const Map = struct {
     }
 
     // Instance Methods
-    pub fn draw(self: *Map, canvas_rect: rl.Rectangle) void {
+    pub fn drawWorld(self: *Map) void {
+        if (self.bg_img) |texture| rl.drawTextureV(texture, rl.Vector2.zero(), rl.Color.white);
+
+        // const alloc = std.heap.page_allocator;
+        // const text = std.fmt.allocPrint(alloc, "ID: {s}\nName: {s}\nWidth: {d}\nHeight: {d}", .{
+        //     self.id,
+        //     self.name,
+        //     self.rect.width,
+        //     self.rect.height,
+        // }) catch "Error";
+        // defer alloc.free(text);
+        // const text_z = alloc.allocSentinel(u8, text.len, 0) catch return;
+        // @memcpy(text_z, text);
+        // rl.drawText(text_z, 10, 10, 16, rl.Color.black);
+
+        // for (self.spawn_points) |point| {
+        //     const x = @as(f32, @floatFromInt(point & 0xFFFF));
+        //     const y = @as(f32, @floatFromInt((point >> 16) & 0xFFFF));
+        //     rl.drawCircleV(rl.Vector2{ .x = x, .y = y }, 5, rl.Color.red);
+        // }
+    }
+
+    pub fn draw(self: *Map, canvas_rect: rl.Rectangle, camera_rect: rl.Rectangle) void {
+        std.debug.print("Drawing map {s} with camera rect ({d}, {d}, {d}, {d})\n", .{ self.id, camera_rect.x, camera_rect.y, camera_rect.width, camera_rect.height });
         if (self.bg_img) |texture| {
-            // Source rectangle (entire texture)- make camera work later
-            const source_rect = rl.Rectangle{
-                .x = 0,
-                .y = 0,
-                .width = @floatFromInt(texture.width),
-                .height = @floatFromInt(texture.height),
-            };
             rl.drawTexturePro(
                 texture,
-                source_rect,
+                camera_rect,
                 canvas_rect,
                 rl.Vector2.zero(),
                 0.0,

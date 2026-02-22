@@ -43,10 +43,20 @@ pub const InputHandler = struct {
     }
 
     pub fn keysActive(self: *InputHandler, keys: []const Key, filter: enum { And, Or }) bool {
-        for (keys) |key| {
-            if (self.active_keys.get(key) == null) return filter == .Or;
+        switch (filter) {
+            .And => {
+                for (keys) |key| {
+                    if (self.active_keys.get(key) == null) return false;
+                }
+                return true;
+            },
+            .Or => {
+                for (keys) |key| {
+                    if (self.active_keys.get(key) != null) return true;
+                }
+                return false;
+            },
         }
-        return filter == .And;
     }
 
     pub fn update(self: *InputHandler) void {
@@ -75,9 +85,29 @@ pub const Key = enum {
     RightShift,
     LeftControl,
     RightControl,
+    One,
+    Two,
+    Three,
+    Four,
+    Five,
+    Six,
+    Seven,
+    Eight,
+    Nine,
+    Zero,
 
     pub fn toString(self: Key) []const u8 {
         return switch (self) {
+            .One => "1",
+            .Two => "2",
+            .Three => "3",
+            .Four => "4",
+            .Five => "5",
+            .Six => "6",
+            .Seven => "7",
+            .Eight => "8",
+            .Nine => "9",
+            .Zero => "0",
             .W => "W",
             .A => "A",
             .S => "S",
@@ -100,6 +130,16 @@ pub const Key = enum {
 
     pub fn toKeyboardKey(self: Key) rl.KeyboardKey {
         return switch (self) {
+            .One => rl.KeyboardKey.one,
+            .Two => rl.KeyboardKey.two,
+            .Three => rl.KeyboardKey.three,
+            .Four => rl.KeyboardKey.four,
+            .Five => rl.KeyboardKey.five,
+            .Six => rl.KeyboardKey.six,
+            .Seven => rl.KeyboardKey.seven,
+            .Eight => rl.KeyboardKey.eight,
+            .Nine => rl.KeyboardKey.nine,
+            .Zero => rl.KeyboardKey.zero,
             .W => rl.KeyboardKey.w,
             .A => rl.KeyboardKey.a,
             .S => rl.KeyboardKey.s,
@@ -122,9 +162,9 @@ pub const Key = enum {
 
     pub fn array() []const Key {
         return &[_]Key{
-            .W,        .A,     .S,      .D,         .Up,         .Down,        .Left,         .Right,
-            .Space,    .Enter, .Escape, .LeftShift, .RightShift, .LeftControl, .RightControl, .LeftAlt,
-            .RightAlt,
+            .One,    .Two,       .Three,      .Four,        .Five,         .Six,     .Seven,    .Eight, .Nine,  .Zero,
+            .W,      .A,         .S,          .D,           .Up,           .Down,    .Left,     .Right, .Space, .Enter,
+            .Escape, .LeftShift, .RightShift, .LeftControl, .RightControl, .LeftAlt, .RightAlt,
         };
     }
 };
