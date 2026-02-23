@@ -7,8 +7,8 @@ pub const Map = struct {
     name: []const u8 = "",
     allocator: std.mem.Allocator,
     bg_img: ?rl.Texture2D = null,
+    data_dir: []const u8 = "./data/maps",
     spawn_points: []const u64 = &[_]u64{},
-    data_dir: []const u8 = "./src/lib/nase-laska/data/maps",
     rect: rl.Rectangle = rl.Rectangle.init(0, 0, 0, 0),
 
     // Static Methods

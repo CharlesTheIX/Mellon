@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .root_source_file = b.path("src/main.zig"),
-            .imports = &.{.{ .name = "mellon", .module = mod }},
+            .imports = &.{.{ .name = "naselaska", .module = mod }},
         }),
     });
 
@@ -29,6 +29,7 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("raygui", raygui);
     b.installArtifact(exe);
 
+    // Run step
     const run_step = b.step("run", "Run the app");
     const run_cmd = b.addRunArtifact(exe);
     run_step.dependOn(&run_cmd.step);

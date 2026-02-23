@@ -4,7 +4,7 @@ const Shell = @import("./lib/core/shell.zig").Shell;
 pub const Config = @import("./lib/core/config.zig").Config;
 const FS = @import("./lib/core/file-system.zig").FileSystem;
 
-pub const NaseLaska = @import("./lib/nase-laska/root.zig").NaseLaska;
+pub const NaseLaska = @import("./lib/nase-laska/src/root.zig").NaseLaska;
 
 pub const Mellon = struct {
     fs: FS,
