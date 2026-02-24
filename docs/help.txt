@@ -9,7 +9,7 @@ BUILT-IN
 	help                 Show this help
 	exit | :q            Exit
 	repl                 Enter REPL
-	nase-laska           Launch NaseLaska GUI
+	naselaska           Launch NaseLaska GUI
 	config               Edit config in editor
 	config set k=v [...] Set config keys
 	config source        Reload config
@@ -33,7 +33,7 @@ TIPS
 	Benchmark prints elapsed time.
 	Arrow keys navigate history.
 
-NASE-LASKA
+NASELASKA
 	Experimental GUI mode built with raylib.
-	Run: mellon nase-laska
+	Run: mellon naselaska
 	Opens 800x600 window for game/GUI interaction.

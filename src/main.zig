@@ -15,10 +15,10 @@ pub fn main() void {
 
     defer std.process.argsFree(allocator, args);
     const cli_args = if (args.len > 1) args[1..] else &[_][]const u8{}; // Skip the program name (args[0])
-    if (args.len > 1 and std.mem.eql(u8, args[1], "nase-laska")) {
-        var nase_laska = NaseLaska.init(allocator);
-        defer nase_laska.deinit();
-        nase_laska.mainLoop() catch std.debug.print("❌ NaseLaska failed\n\n", .{});
+    if (args.len > 1 and std.mem.eql(u8, args[1], "naselaska")) {
+        var naselaska = NaseLaska.init(allocator);
+        defer naselaska.deinit();
+        naselaska.start() catch std.debug.print("❌ NaseLaska failed\n\n", .{});
         return std.process.exit(0);
     }
 

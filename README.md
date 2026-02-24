@@ -165,7 +165,7 @@ Mellon includes an experimental game/GUI feature called "NaseLaska" built with r
 To launch NaseLaska mode:
 
 ```bash
-mellon nase-laska
+mellon naselaska
 ```
 
 This opens a GUI window (800x600) running at 60 FPS. The mode loads map data from `.test-data/` directory and provides a graphical interface separate from the shell REPL.
@@ -201,7 +201,7 @@ mellon/
 │       │   ├── io.zig         # Input/Output and colored text handling
 │       │   ├── shell.zig      # Shell command execution
 │       │   └── file-system.zig # File operations (read, write, copy, delete)
-│       └── nase-laska/
+│       └── naselaska/
 │           ├── root.zig        # NaseLaska game engine
 │           └── map.zig         # Game map data and persistence
 ├── zig-out/
@@ -265,10 +265,10 @@ pub fn main() !void {
     const cli_args = if (args.len > 1) args[1..] else &[_][]const u8{};
 
     // Special mode: NaseLaska game
-    if (args.len > 1 and std.mem.eql(u8, args[1], "nase-laska")) {
+    if (args.len > 1 and std.mem.eql(u8, args[1], "naselaska")) {
         var nase_laska = NaseLaska.init(allocator);
         defer nase_laska.deinit();
-        nase_laska.mainLoop() catch std.debug.print("❌ NaseLaska failed\n\n", .{});
+        nase_laska.start() catch std.debug.print("❌ NaseLaska failed\n\n", .{});
         return std.process.exit(0);
     }
 
@@ -316,7 +316,7 @@ Mellon recognizes these built-in commands:
 | `config`      | -       | Configure prompt/editor/intro |
 | `help`        | -       | Display help information      |
 | `repl`        | -       | Enter interactive REPL mode   |
-| `nase-laska`  | -       | Launch NaseLaska GUI mode     |
+| `naselaska`   | -       | Launch NaseLaska GUI mode     |
 | `(other)`     | -       | Passed to shell executor      |
 
 `help` prints the contents of `docs/help.txt`.
