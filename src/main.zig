@@ -18,7 +18,10 @@ pub fn main() void {
     if (args.len > 1 and std.mem.eql(u8, args[1], "naselaska")) {
         var naselaska = NaseLaska.init(allocator);
         defer naselaska.deinit();
-        naselaska.start() catch std.debug.print("❌ NaseLaska failed\n\n", .{});
+        naselaska.run();
+        return std.process.exit(0);
+    } else if (args.len > 1 and std.mem.eql(u8, args[1], "test")) {
+        std.debug.print("this is a test\n\n", .{});
         return std.process.exit(0);
     }
 
