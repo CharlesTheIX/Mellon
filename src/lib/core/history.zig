@@ -1,29 +1,29 @@
 const std = @import("std");
+const ErrorHandler = @import("./error-handler.zig").ErrorHandler;
 
 pub const History = struct {
-    max_size: usize,
-    current_index: ?usize,
+    Err: *ErrorHandler,
+    max_size: usize = 1000,
     history_path: []const u8,
+    current_index: ?usize = null,
     allocator: std.mem.Allocator,
     commands: std.ArrayList([]u8),
 
-    // Static Methods
-    pub fn init(alloc: std.mem.Allocator) History {
+    pub fn init(alloc: std.mem.Allocator, Err: *ErrorHandler) History {
         const home = std.posix.getenv("HOME") orelse "~";
         const history_path = std.fmt.allocPrint(alloc, "{s}/.mellon_history", .{home}) catch "";
         var history = History{
-            .max_size = 1000,
-            .current_index = null,
+            .Err = Err,
             .allocator = alloc,
             .history_path = history_path,
             .commands = std.ArrayList([]u8){},
         };
-        history.load() catch {};
+        history.load() catch |err| history.Err.handle(err, "Failed to load command history\n\n", false, true);
         return history;
     }
 
     // Instance Methods
-    pub fn add(self: *History, command: []const u8) !void {
+    pub fn add(self: *History, command: []const u8) void {
         if (command.len == 0) return;
         if (self.commands.items.len > 0) {
             const last = self.commands.items[self.commands.items.len - 1];
@@ -32,20 +32,25 @@ pub const History = struct {
                 return;
             }
         }
-        const cmd_copy = try self.allocator.dupe(u8, command);
-        try self.commands.append(self.allocator, cmd_copy);
+        const cmd_copy = self.allocator.dupe(u8, command) catch {
+            self.Err.handle(error.OutOfMemory, "Failed to allocate memory for command history\n\n", false, true);
+            return;
+        };
+        self.commands.append(self.allocator, cmd_copy) catch |err| {
+            self.Err.handle(err, "Failed to add command to history\n\n", false, true);
+            self.allocator.free(cmd_copy);
+            return;
+        };
         self.current_index = null;
-
         while (self.commands.items.len > self.max_size) {
             const first = self.commands.orderedRemove(0);
             self.allocator.free(first);
         }
-
-        self.save() catch {};
+        self.save() catch |err| return self.Err.handle(err, "Failed to save command history\n\n", false, true);
     }
 
     pub fn deinit(self: *History) void {
-        self.save() catch {};
+        self.save() catch |err| self.Err.handle(err, "Failed to save command history\n\n", false, true);
         for (self.commands.items) |cmd| self.allocator.free(cmd);
         self.commands.deinit(self.allocator);
         if (self.history_path.len > 0) self.allocator.free(self.history_path);
@@ -77,24 +82,17 @@ pub const History = struct {
         self.current_index = null;
     }
 
+    // Private Methods
     fn load(self: *History) !void {
-        if (self.history_path.len == 0) return;
-
-        const file = std.fs.openFileAbsolute(self.history_path, .{ .mode = .read_only }) catch |err| {
-            if (err == error.FileNotFound) return;
-            return err;
-        };
+        if (self.history_path.len == 0) return error.NoConfigPath;
+        const file = try std.fs.openFileAbsolute(self.history_path, .{ .mode = .read_only });
         defer file.close();
-
         const file_size = try file.getEndPos();
-        if (file_size == 0) return;
-
+        if (file_size == 0) return error.FileNotFound;
         const buffer = try self.allocator.alloc(u8, file_size);
         defer self.allocator.free(buffer);
-
         const bytes_read = try file.readAll(buffer);
         if (bytes_read != file_size) return error.IncompleteRead;
-
         var lines = std.mem.splitScalar(u8, buffer, '\n');
         while (lines.next()) |line| {
             const trimmed = std.mem.trim(u8, line, &std.ascii.whitespace);
@@ -103,11 +101,9 @@ pub const History = struct {
                 const last = self.commands.items[self.commands.items.len - 1];
                 if (std.mem.eql(u8, last, trimmed)) continue;
             }
-
             const cmd_copy = try self.allocator.dupe(u8, trimmed);
             try self.commands.append(self.allocator, cmd_copy);
         }
-
         while (self.commands.items.len > self.max_size) {
             const first = self.commands.orderedRemove(0);
             self.allocator.free(first);
@@ -115,7 +111,7 @@ pub const History = struct {
     }
 
     fn save(self: *const History) !void {
-        if (self.history_path.len == 0) return;
+        if (self.history_path.len == 0) return error.NoConfigPath;
         const file = try std.fs.createFileAbsolute(self.history_path, .{});
         defer file.close();
         var buffer: [4096]u8 = undefined;

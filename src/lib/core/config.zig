@@ -1,39 +1,46 @@
 const std = @import("std");
 const Shell = @import("./shell.zig").Shell;
 const Editor = @import("./file-system.zig").Editor;
+const ErrorHandler = @import("./error-handler.zig").ErrorHandler;
+const openEditor = @import("./shell.zig").openEditor;
 
 pub const Config = struct {
-    show_cwd: bool,
-    show_intro: bool,
-    editor: []const u8,
+    Err: *ErrorHandler,
     prompt: []const u8,
-    log_dir: []const u8,
-    config_path: []const u8,
+    editor: []const u8,
+    log_dir: ?[]const u8,
+    show_cwd: bool = true,
+    show_intro: bool = true,
+    config_path: ?[]const u8,
     allocator: std.mem.Allocator,
 
-    // Static Methods
-    pub fn init(allocator: std.mem.Allocator) Config {
+    pub fn init(allocator: std.mem.Allocator, Err: *ErrorHandler) Config {
         const home = std.posix.getenv("HOME") orelse "~";
-        const log_dir = std.fmt.allocPrint(allocator, "{s}/.mellon_logs", .{home}) catch allocator.dupe(u8, "") catch "";
-        const config_path = std.fmt.allocPrint(allocator, "{s}/.mellonrc", .{home}) catch allocator.dupe(u8, "") catch "";
-        const default_editor = allocator.dupe(u8, "vim") catch "vim";
-        const default_prompt = allocator.dupe(u8, "⚡") catch "⚡";
+        const log_dir = std.fmt.allocPrint(allocator, "{s}/.mellon_logs", .{home}) catch null;
+        const config_path = std.fmt.allocPrint(allocator, "{s}/.mellonrc", .{home}) catch null;
+        const prompt = allocator.dupe(u8, "⚡") catch "⚡";
+        const editor = allocator.dupe(u8, "vim") catch "vim";
         var config = Config{
-            .show_cwd = true,
-            .show_intro = true,
+            .Err = Err,
+            .prompt = prompt,
+            .editor = editor,
             .log_dir = log_dir,
             .allocator = allocator,
-            .editor = default_editor,
-            .prompt = default_prompt,
             .config_path = config_path,
         };
-        config.load() catch {};
+        config.load() catch |err| config.Err.handle(err, "Failed to load config file\n\n", false, true);
+        config.save() catch |err| config.Err.handle(err, "Failed to save config file\n\n", false, true);
         return config;
     }
 
     // Instances Methods
-    pub fn controller(self: *Config, args: []const u8) !void {
-        if (args.len == 0) return try self.edit();
+    pub fn controller(self: *Config, args: []const u8) void {
+        if (args.len == 0) return self.edit() catch |err| return self.Err.handle(
+            err,
+            "Failed to edit config file\n\n",
+            false,
+            true,
+        );
         var arg_parts = std.mem.splitSequence(u8, args, " ");
         const func = Fn.get(arg_parts.first());
         switch (func) {
@@ -43,44 +50,71 @@ pub const Config = struct {
                     const key = kv.first();
                     const value = kv.rest();
                     if (key.len == 0 or value.len == 0) continue;
-                    try self.set(key, value);
+                    self.set(key, value) catch |err| {
+                        self.Err.handle(err, "Failed to set config value\n\n", false, true);
+                        continue;
+                    };
                 }
-                return self.save() catch {};
+                return self.save() catch |err| return self.Err.handle(
+                    err,
+                    "Failed to save config file\n\n",
+                    false,
+                    true,
+                );
             },
-            .Source => return try self.load(),
-            else => return try self.edit(),
+            .Source => return self.load() catch |err| return self.Err.handle(
+                err,
+                "Failed to load config file\n\n",
+                false,
+                true,
+            ),
+            else => return self.edit() catch |err| return self.Err.handle(
+                err,
+                "Failed to edit config file\n\n",
+                false,
+                true,
+            ),
         }
     }
 
     pub fn deinit(self: *Config) void {
         self.allocator.free(self.editor);
         self.allocator.free(self.prompt);
-        if (self.config_path.len > 0) self.allocator.free(self.config_path);
-        if (self.log_dir.len > 0) self.allocator.free(self.log_dir);
+        if (self.log_dir) |log_dir| self.allocator.free(log_dir);
+        if (self.config_path) |config_path| self.allocator.free(config_path);
     }
 
+    pub fn getFullPrompt(self: *const Config) []const u8 {
+        if (self.show_cwd) {
+            const cwd = std.fs.cwd().realpathAlloc(self.allocator, ".") catch |err| {
+                self.Err.handle(err, "Failed to get current working directory\n\n", false, true);
+                return "";
+            };
+            defer self.allocator.free(cwd);
+            return std.fmt.allocPrint(self.allocator, "{s} {s} ", .{ cwd, self.prompt }) catch |err| {
+                self.Err.handle(err, "Failed to allocate memory for prompt\n\n", false, true);
+                return "";
+            };
+        }
+        return std.fmt.allocPrint(self.allocator, "{s} ", .{self.prompt}) catch |err| {
+            self.Err.handle(err, "Failed to allocate memory for prompt\n\n", false, true);
+            return "";
+        };
+    }
+
+    // Private Methods
     fn edit(self: *Config) !void {
-        if (self.config_path.len == 0) return error.NoConfigPath;
+        const config_path = self.config_path orelse return error.NoConfigPath;
+        if (config_path.len == 0) return error.NoConfigPath;
         const editor = Editor.get(self.editor);
-        try Shell.openEditor(editor, self.config_path);
+        openEditor(editor, config_path);
         try self.load();
     }
 
-    pub fn getFullPrompt(self: *const Config) ![]const u8 {
-        if (self.show_cwd) {
-            const cwd = try std.fs.cwd().realpathAlloc(self.allocator, ".");
-            defer self.allocator.free(cwd);
-            return try std.fmt.allocPrint(self.allocator, "{s} {s} ", .{ cwd, self.prompt });
-        }
-        return try std.fmt.allocPrint(self.allocator, "{s} ", .{self.prompt});
-    }
-
     fn load(self: *Config) !void {
-        if (self.config_path.len == 0) return;
-        const file = std.fs.openFileAbsolute(self.config_path, .{ .mode = .read_only }) catch |err| {
-            if (err == error.FileNotFound) return self.save();
-            return err;
-        };
+        const config_path = self.config_path orelse return error.NoConfigPath;
+        if (config_path.len == 0) return error.NoConfigPath;
+        const file = try std.fs.openFileAbsolute(config_path, .{ .mode = .read_only });
         defer file.close();
 
         const file_size = try file.getEndPos();
@@ -96,7 +130,6 @@ pub const Config = struct {
         while (lines.next()) |line| {
             const trimmed = std.mem.trim(u8, line, &std.ascii.whitespace);
             if (trimmed.len == 0 or trimmed[0] == '#') continue;
-
             var parts = std.mem.splitScalar(u8, trimmed, '=');
             const key = std.mem.trim(u8, parts.first(), &std.ascii.whitespace);
             const value_str = std.mem.trim(u8, parts.rest(), &std.ascii.whitespace);
@@ -106,8 +139,9 @@ pub const Config = struct {
     }
 
     fn save(self: *const Config) !void {
-        if (self.config_path.len == 0) return error.NoConfigPath;
-        const file = try std.fs.createFileAbsolute(self.config_path, .{});
+        const config_path = self.config_path orelse return error.NoConfigPath;
+        if (config_path.len == 0) return error.NoConfigPath;
+        const file = try std.fs.createFileAbsolute(config_path, .{});
         defer file.close();
 
         var buffer: [2048]u8 = undefined;
@@ -117,14 +151,14 @@ pub const Config = struct {
         try writer.print("# Mellon Configuration File\n", .{});
         try writer.print("editor={s}\n", .{self.editor});
         try writer.print("prompt={s}\n", .{self.prompt});
-        try writer.print("log_dir={s}\n", .{self.log_dir});
+        try writer.print("log_dir={s}\n", .{self.log_dir orelse ""});
         try writer.print("show_cwd={s}\n", .{if (self.show_cwd) "true" else "false"});
         try writer.print("show_intro={s}\n", .{if (self.show_intro) "true" else "false"});
         try file.writeAll(stream.getWritten());
     }
 
     fn set(self: *Config, key: []const u8, value: []const u8) !void {
-        if (value.len == 0) return;
+        if (value.len == 0) return error.InvalidCommand;
 
         if (std.mem.eql(u8, key, "editor")) {
             const new = try self.allocator.dupe(u8, value);
