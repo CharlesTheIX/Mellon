@@ -1,5 +1,5 @@
 const std = @import("std");
-const readFile = @import("./file-system.zig").readFile;
+const readFile = @import("./utils.zig").readFile;
 
 pub const ErrorHandler = struct {
     log_dir: ?[]const u8 = null,

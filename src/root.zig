@@ -2,11 +2,11 @@ const std = @import("std");
 pub const IO = @import("./lib/core/io.zig").IO;
 const Search = @import("./lib/search.zig").Search;
 const Shell = @import("./lib/core/shell.zig").Shell;
-const clear = @import("./lib/core/shell.zig").clear;
+const clear = @import("./lib/core/utils.zig").clear;
 pub const Config = @import("./lib/core/config.zig").Config;
 const FS = @import("./lib/core/file-system.zig").FileSystem;
 pub const ErrorHandler = @import("./lib/core/error-handler.zig").ErrorHandler;
-const readFile = @import("./lib/core/file-system.zig").readFile;
+const readFile = @import("./lib/core/utils.zig").readFile;
 
 pub const Mellon = struct {
     fs: FS,

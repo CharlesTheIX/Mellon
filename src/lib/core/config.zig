@@ -1,8 +1,8 @@
 const std = @import("std");
 const Shell = @import("./shell.zig").Shell;
-const Editor = @import("./file-system.zig").Editor;
+const Editor = @import("./utils.zig").Editor;
 const ErrorHandler = @import("./error-handler.zig").ErrorHandler;
-const openEditor = @import("./shell.zig").openEditor;
+const openEditor = @import("./utils.zig").openEditor;
 
 pub const Config = struct {
     Err: *ErrorHandler,

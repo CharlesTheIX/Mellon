@@ -1,102 +1,14 @@
 const std = @import("std");
 const IO = @import("./io.zig").IO;
 const Shell = @import("./shell.zig").Shell;
+const Editor = @import("./utils.zig").Editor;
 const Config = @import("./config.zig").Config;
-const clear = @import("./shell.zig").clear;
+const clear = @import("./utils.zig").clear;
+const FileType = @import("./utils.zig").FileType;
 const ErrorHandler = @import("./error-handler.zig").ErrorHandler;
-const openEditor = @import("./shell.zig").openEditor;
-
-fn getAbsPath(path: []const u8) ![]const u8 {
-    const path_first_char = path[0..1];
-    if (std.mem.eql(u8, path_first_char, "/")) return path;
-    const allocator = std.heap.page_allocator;
-    if (std.mem.eql(u8, path_first_char, "~")) {
-        const env = try std.process.getEnvMap(allocator);
-        const home_path = env.get("HOME") orelse "";
-        return try std.fs.path.join(allocator, &[_][]const u8{ home_path, "/", path[1..] });
-    }
-    var count: u8 = 0;
-    var cwd_path: []const u8 = "";
-    var path_parts = std.mem.splitSequence(u8, path, "/");
-    while (path_parts.next()) |part| {
-        if (std.mem.eql(u8, part, ".")) {
-            count += 2;
-            cwd_path = try std.fs.path.join(allocator, &[_][]const u8{ cwd_path, "." });
-        } else if (std.mem.eql(u8, part, "..")) {
-            if (count == 0) cwd_path = try std.fs.path.join(allocator, &[_][]const u8{ cwd_path, ".." });
-            if (count >= 2) cwd_path = try std.fs.path.join(allocator, &[_][]const u8{ cwd_path, "/.." });
-            count += 3;
-        } else break;
-    }
-    const cwd = try std.fs.cwd().realpathAlloc(allocator, cwd_path);
-    defer allocator.free(cwd);
-    return try std.fs.path.join(allocator, &[_][]const u8{ cwd, "/", path[count..] });
-}
-
-pub fn readFile(path: []const u8) ![]const u8 {
-    const file_type = FileType.get(path);
-    if (file_type == .Invalid) return error.InvalidFileType;
-    const abs_path: []const u8 = try getAbsPath(path);
-    var file = try std.fs.openFileAbsolute(abs_path, .{ .mode = .read_only });
-    defer file.close();
-    const file_size = try file.getEndPos();
-    if (file_size == 0) return "";
-    if (file_size > 10 * 1024 * 1024) return error.FileTooLarge;
-    const allocator = std.heap.page_allocator;
-    const buffer = try allocator.alloc(u8, file_size);
-    const file_bytes = try file.readAll(buffer);
-    if (file_bytes != file_size) {
-        allocator.free(buffer);
-        return error.IncompleteRead;
-    }
-    return buffer[0..file_size];
-}
-
-pub const Editor = enum {
-    Nano,
-    Nvim,
-    Vim,
-    VsCode,
-    Invalid,
-
-    pub fn get(string: []const u8) Editor {
-        if (std.mem.eql(u8, string, "nano")) return .Nano;
-        if (std.mem.eql(u8, string, "nvim")) return .Nvim;
-        if (std.mem.eql(u8, string, "vim") or string.len == 0) return .Vim;
-        if (std.mem.eql(u8, string, "vscode") or std.mem.eql(u8, string, "code")) return .VsCode;
-        return .Invalid;
-    }
-};
-
-const FileType = enum {
-    JS,
-    JSON,
-    MD,
-    TS,
-    Txt,
-    Z,
-    Invalid,
-
-    fn get(path: []const u8) FileType {
-        if (path.len == 0) return .Invalid;
-
-        var path_parts = std.mem.splitSequence(u8, path, "/");
-        var file_name: []const u8 = undefined;
-        while (path_parts.next()) |part| file_name = part;
-
-        var file_name_parts = std.mem.splitSequence(u8, file_name, ".");
-        var file_type: []const u8 = "";
-        while (file_name_parts.next()) |part| file_type = part;
-
-        if (std.mem.eql(u8, file_type, "js")) return .JS;
-        if (std.mem.eql(u8, file_type, "json")) return .JSON;
-        if (std.mem.eql(u8, file_type, "md")) return .MD;
-        if (std.mem.eql(u8, file_type, "ts")) return .TS;
-        if (std.mem.eql(u8, file_type, "txt")) return .Txt;
-        if (std.mem.eql(u8, file_type, "z")) return .Z;
-        return .Invalid;
-    }
-};
+const readFile = @import("./utils.zig").readFile;
+const getAbsPath = @import("./utils.zig").getAbsPath;
+const openEditor = @import("./utils.zig").openEditor;
 
 pub const FileSystem = struct {
     io: *IO,

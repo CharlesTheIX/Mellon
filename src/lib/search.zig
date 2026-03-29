@@ -8,6 +8,7 @@ pub const Search = struct {
         return Search{ .Err = Err };
     }
 
+    // Instance Methods
     pub fn controller(self: *Search, query: []const u8) void {
         if (query.len == 0) return;
         const allocator = std.heap.page_allocator;
