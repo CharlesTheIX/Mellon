@@ -1,271 +1,262 @@
-# Mellon 🧙
+# Mellon
 
-A high-performance shell-like REPL application written in [Zig](https://ziglang.org/). Mellon provides an interactive command interface with built-in support for file system operations and shell command execution.
+Mellon is a small interactive shell written in Zig. It runs as a REPL, dispatches a handful of built-in commands, falls back to external programs found in `PATH`, keeps command history, and exposes simple helpers for config, search, benchmarking, and file operations.
 
-## Features
+The documentation in this repository now tracks the code that exists today instead of older planned features.
 
-- **Dual Mode Operation**: Use as a CLI tool for single commands or enter REPL mode for interactive commands
-- **Interactive REPL**: Command-line interface with a configurable prompt (defaults to `⚡`)
-- **CLI Tool**: Execute individual commands directly without entering REPL mode
-- **Shell Integration**: Execute standard shell commands directly
-- **File System Operations**: Built-in commands for reading, writing, copying, and deleting files
-- **Configurable Runtime**: `config` command and `~/.mellonrc` support for editor, prompt, and intro display
-- **Command History**: Arrow-key navigation in REPL with persistent history saved to `~/.mellon_history`
-- **Colored Output**: Color-coded messages for better user experience (Red, Green, Blue, Cyan, Magenta, Yellow, White)
-- **Performance Benchmarking**: Built-in `benchmark` command to time command execution
+## What Mellon Does
 
-## Table of Contents
+- interactive terminal REPL
+- configurable prompt and intro screen
+- built-in commands for help, config, search, file operations, and benchmarking
+- shell fallback for non-built-in commands
+- command history saved to `~/.mellon_history`
+- config stored in `~/.mellonrc`
+- optional error logs written under `~/.mellon_logs`
 
-- [Setup](#setup)
-  - [Prerequisites](#prerequisites)
-  - [Building from Source](#building-from-source)
-- [Usage](#usage)
-  - [CLI Mode](#cli-mode)
-  - [REPL Mode](#repl-mode)
-- [Understanding the Project](#understanding-the-project)
-  - [Project Structure](#project-structure)
-  - [Architecture Overview](#architecture-overview)
-- [Deeper Dive](#deeper-dive)
-  - [Core Components](#core-components)
-  - [Command System](#command-system)
-  - [Module Details](#module-details)
-    - [Configuration](#configuration)
-- [Using the Binary](#using-the-binary)
-  - [Adding to PATH](#adding-to-path)
-  - [Creating Aliases](#creating-aliases)
+## Build
 
-## Setup
+Requirements:
 
-### Prerequisites
+- Zig 0.15.2 or newer
+- Unix-like terminal environment
+- `rg` in `PATH` if you want to use the `search` command
 
-- **Zig** (v0.15.2 or later) - [Download Zig](https://ziglang.org/download/)
-- **macOS** (or compatible Unix-like system)
-- **raylib** dependencies (automatically fetched by Zig build system)
-
-Verify your Zig installation:
-
-```bash
-zig version
-```
-
-### Building from Source
-
-1. **Clone or navigate to the project directory**:
-
-```bash
-cd /Users/davidcharles/repos/mellon
-```
-
-2. **Build the project**:
+Build:
 
 ```bash
 zig build
 ```
 
-3. **Run the application**:
+Run:
 
 ```bash
 zig build run
 ```
 
-The compiled binary will be available at:
+Installed binary path:
 
-```
+```text
 zig-out/bin/mellon
 ```
 
-## Usage
+## Starting Mellon
 
-### CLI Mode
-
-Use Mellon to execute single commands from your shell without entering interactive mode:
-
-```bash
-# Get current working directory
-mellon pwd
-
-# List directory contents
-mellon ls -la
-
-# Execute shell commands
-mellon whoami
-
-# Use file system operations
-mellon fs read --path=./README.md
-mellon fs write --path=./newfile.txt --editor=nvim
-mellon fs copy --from=./file1.txt --to=./file2.txt
-mellon fs delete --path=./oldfile.txt
-mellon fs get_abs --path=~/Documents
-
-# Benchmark a command
-mellon benchmark ls -la
-
-# Configure settings
-mellon config set editor=code prompt=⚡ show_intro=false show_cwd=false
-mellon config source
-mellon config
-```
-
-CLI mode is perfect for:
-
-- Scripting and automation
-- Single command execution
-- Integration with other tools
-- Shell pipelines
-
-### REPL Mode
-
-Enter interactive mode by running Mellon without arguments:
+Run Mellon with no arguments to enter the REPL:
 
 ```bash
 mellon
 ```
 
-You'll see the Mellon prompt (default is `⚡`).
+The prompt defaults to `⚡`. When `show_cwd=true`, the prompt includes the current working directory.
 
-On startup, Mellon prompts for a password sourced from [src/.env.zig](src/.env.zig).
+The codebase is also structured to route commands passed on the command line through the same top-level controller.
 
-In REPL mode, execute commands interactively:
+## Top-Level Commands
 
-```
-⚡ pwd
-/Users/davidcharles/repos/mellon
+Mellon recognizes these commands:
 
-⚡ ls
-build.zig               src
-build.zig.zon           zig-out
-README.md
+- `help`
+- `exit` or `:q`
+- `repl`
+- `benchmark` or `bench`
+- `config`
+- `file-system` or `fs`
+- `search` or `s`
 
-⚡ fs read --path=./README.md
+If a command is not built in, Mellon attempts to find it in `PATH` and execute it as a child process.
 
-⚡ benchmark ls -la
+## Command Reference
 
-⚡ help
+### Help
 
-⚡ exit
-Goodbye! 👋
-```
+Show the bundled help page:
 
-Or explicitly enter REPL mode from CLI:
-
-```bash
-mellon repl
+```text
+help
 ```
 
-REPL mode is perfect for:
+### Exit
 
-- Interactive exploration and testing
-- Continuous command execution without restarting
-- Development and debugging workflows
+Leave the session:
 
-### NaseLaska Mode (Experimental)
-
-Mellon includes an experimental game/GUI feature called "NaseLaska" ("Naše Láska") built with raylib. This is an integrated subproject providing a separate interactive graphical mode that demonstrates Zig's graphics capabilities.
-
-To launch NaseLaska mode:
-
-```bash
-mellon naselaska
+```text
+exit
+:q
 ```
 
-This opens a GUI window (800x600) running at 60 FPS with 2D map rendering, camera controls, and input handling. The mode provides a graphical interface completely separate from the shell REPL.
+### Benchmark
 
-**Features:**
+Benchmark a Mellon-routed command:
 
-- Raylib-based GUI window with 2D rendering
-- Map loading and rendering (`.z` format files from `src/lib/naselaska/data/maps/`)
-- Camera system with smooth movement controls
-- Keyboard input handling
-- 60 FPS rendering loop
-- Press ESC or close window to exit
-
-**Note:** NaseLaska is an experimental feature and requires raylib dependencies (automatically handled by the build system). See [src/lib/naselaska/README.md](src/lib/naselaska/README.md) for detailed documentation.
-
-## Understanding the Project
-
-### Project Structure
-
+```text
+benchmark ls -la
+bench fs read --path=./README.md
 ```
+
+Mellon prints elapsed time in milliseconds and nanoseconds.
+
+### Search
+
+Search delegates to ripgrep using `rg --vimgrep`:
+
+```text
+search prompt
+s FileSystem
+```
+
+Notes:
+
+- `rg` must be installed
+- the query string is passed directly to ripgrep
+- output uses ripgrep's vimgrep format
+
+### Config
+
+Config lives at `~/.mellonrc`.
+
+Common commands:
+
+```text
+config
+config edit
+config set prompt=$
+config set editor=code show_intro=false show_cwd=false
+config source
+```
+
+Config keys handled by the current code:
+
+- `editor`
+- `prompt`
+- `show_intro`
+- `show_cwd`
+
+The config file also contains `log_dir`, which Mellon uses for error logs.
+
+### File System
+
+The file-system command group provides:
+
+```text
+fs help
+fs read --path=./README.md
+fs write --path=./notes.md --editor=code
+fs copy --from=./a.txt --to=./b.txt
+fs delete --path=./old.txt
+fs get_abs --path=~/projects
+```
+
+Available subcommands:
+
+- `help`
+- `read`
+- `write`
+- `copy`
+- `delete`
+- `get_abs`
+
+Current limitation:
+
+- Mellon only accepts these file extensions for file operations: `js`, `json`, `md`, `ts`, `txt`, `z`
+
+### Shell Fallback
+
+Examples of commands handled through shell fallback:
+
+```text
+pwd
+ls -la
+git status
+clear
+```
+
+Special behaviour exists for:
+
+- `pwd`
+- `clear`
+
+All other non-built-in commands are executed as child processes.
+
+## REPL Behaviour
+
+The REPL currently supports:
+
+- editable input line
+- left and right arrow cursor movement
+- up and down arrow history navigation
+- Ctrl+C to clear the current line
+- colored terminal output
+
+History details:
+
+- stored at `~/.mellon_history`
+- duplicate consecutive commands are skipped
+- history is capped at 1000 entries
+
+## Runtime Files
+
+Mellon creates or uses these files:
+
+- `~/.mellonrc`
+- `~/.mellon_history`
+- `~/.mellon_logs/error.log` and related log files when error logging is enabled
+
+## Project Layout
+
+```text
 mellon/
-├── build.zig              # Zig build configuration
-├── build.zig.zon          # Zig package manifest
+├── build.zig
+├── build.zig.zon
 ├── docs/
-│   ├── help.txt            # Help text shown by the help command
-│   └── intro.txt           # Intro text shown on REPL start
+│   ├── help.txt
+│   ├── intro.txt
+│   └── file_system_help.txt
 ├── src/
-│   ├── .env.zig           # Local password value for startup prompt
-│   ├── main.zig           # Application entry point
-│   ├── root.zig           # Main Mellon struct and command controller
+│   ├── main.zig
+│   ├── root.zig
 │   └── lib/
-│       ├── core/
-│       │   ├── config.zig      # Config handling and .mellonrc parsing
-│       │   ├── history.zig     # Persistent REPL history (~/.mellon_history)
-│       │   ├── io.zig          # Input/Output and colored text handling
-│       │   ├── shell.zig       # Shell command execution
-│       │   └── file-system.zig # File operations (read, write, copy, delete)
-│       └── naselaska/          # NaseLaska subproject (integrated GUI/game mode)
-│           ├── build.zig       # NaseLaska build configuration
-│           ├── build.zig.zon   # NaseLaska dependencies
-│           ├── local.sh        # Build helper script
-│           ├── README.md       # NaseLaska documentation
-│           ├── src/
-│           │   ├── main.zig              # NaseLaska entry point
-│           │   ├── root.zig              # Main NaseLaska struct
-│           │   └── lib/
-│           │       ├── audio-handler.zig # Audio system
-│           │       ├── camera.zig        # Camera 2D controls
-│           │       ├── canvas.zig        # Canvas/viewport
-│           │       ├── input-handler.zig # Keyboard input
-│           │       ├── main-menu.zig     # Menu system
-│           │       ├── map.zig           # Map rendering
-│           │       ├── player.zig        # Player entity
-│           │       ├── timer.zig         # Timing utilities
-│           │       └── utils.zig         # Utility functions
-│           └── data/
-│               ├── audio/        # Audio assets (music, sfx)
-│               ├── fonts/        # Font assets
-│               └── maps/         # Map files (.z format)
-├── zig-out/
-│   └── bin/
-│       └── mellon         # Compiled executable
-└── README.md              # This file
+│       ├── search.zig
+│       └── core/
+│           ├── config.zig
+│           ├── error-handler.zig
+│           ├── file-system.zig
+│           ├── history.zig
+│           ├── io.zig
+│           ├── shell.zig
+│           └── utils.zig
+└── zig-out/
 ```
 
-### Architecture Overview
+## Architecture
 
-Mellon follows a modular architecture with three main components working together. The application supports two execution modes:
+High-level flow:
 
-**CLI Mode** (single command execution):
+1. `src/main.zig` builds the runtime objects.
+2. `src/root.zig` routes top-level commands.
+3. `src/lib/core/io.zig` manages input, output, colors, and history-aware editing.
+4. `src/lib/core/config.zig` loads and saves `~/.mellonrc`.
+5. `src/lib/core/file-system.zig` implements file helpers.
+6. `src/lib/core/shell.zig` executes external commands.
+7. `src/lib/search.zig` delegates search to ripgrep.
 
-```
-$ mellon <command> [args]
-        ↓
-   Mellon.run(args)
-        ↓
-   Mellon.controller() - Routes command
-        ↓
-   └─ Execute and exit
-```
+## Documentation Files
 
-**REPL Mode** (interactive):
+If you change user-visible behaviour, update these files together:
 
-```
-$ mellon
-        ↓
-   Mellon.run(empty args)
-        ↓
-   Mellon.repl() - Interactive loop
-        ↓
-   User Input (⚡ prompt)
-        ↓
-   Mellon.controller() - Routes commands
-        ↓
-     ├─ "exit" / ":q" → Exit program
-     ├─ "file-system" / "fs" → FileSystem.controller()
-     ├─ "help" → Display help
-     ├─ "repl" → Already in REPL mode
-     └─ Other → Shell.controller()
-```
+- `README.md`
+- `docs/help.txt`
+- `docs/intro.txt`
+- `docs/file_system_help.txt`
+  Mellon.controller() - Routes commands
+  ↓
+  ├─ "exit" / ":q" → Exit program
+  ├─ "file-system" / "fs" → FileSystem.controller()
+  ├─ "help" → Display help
+  ├─ "repl" → Already in REPL mode
+  └─ Other → Shell.controller()
+
+````
 
 ## Deeper Dive
 
@@ -307,7 +298,7 @@ pub fn main() !void {
     defer mellon.deinit();
     return try mellon.run(cli_args);
 }
-```
+````
 
 #### 2. Root Module (`src/root.zig`)
 
