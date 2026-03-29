@@ -160,7 +160,7 @@ REPL mode is perfect for:
 
 ### NaseLaska Mode (Experimental)
 
-Mellon includes an experimental game/GUI feature called "NaseLaska" built with raylib. This is a separate interactive mode that demonstrates Zig's graphics capabilities.
+Mellon includes an experimental game/GUI feature called "NaseLaska" ("Naše Láska") built with raylib. This is an integrated subproject providing a separate interactive graphical mode that demonstrates Zig's graphics capabilities.
 
 To launch NaseLaska mode:
 
@@ -168,16 +168,18 @@ To launch NaseLaska mode:
 mellon naselaska
 ```
 
-This opens a GUI window (800x600) running at 60 FPS. The mode loads map data from `.test-data/` directory and provides a graphical interface separate from the shell REPL.
+This opens a GUI window (800x600) running at 60 FPS with 2D map rendering, camera controls, and input handling. The mode provides a graphical interface completely separate from the shell REPL.
 
 **Features:**
 
-- Raylib-based GUI window
-- Map data persistence (`.z` format files)
+- Raylib-based GUI window with 2D rendering
+- Map loading and rendering (`.z` format files from `src/lib/naselaska/data/maps/`)
+- Camera system with smooth movement controls
+- Keyboard input handling
 - 60 FPS rendering loop
 - Press ESC or close window to exit
 
-**Note:** NaseLaska is an experimental feature and requires raylib dependencies (automatically handled by the build system).
+**Note:** NaseLaska is an experimental feature and requires raylib dependencies (automatically handled by the build system). See [src/lib/naselaska/README.md](src/lib/naselaska/README.md) for detailed documentation.
 
 ## Understanding the Project
 
@@ -198,12 +200,31 @@ mellon/
 │       ├── core/
 │       │   ├── config.zig      # Config handling and .mellonrc parsing
 │       │   ├── history.zig     # Persistent REPL history (~/.mellon_history)
-│       │   ├── io.zig         # Input/Output and colored text handling
-│       │   ├── shell.zig      # Shell command execution
+│       │   ├── io.zig          # Input/Output and colored text handling
+│       │   ├── shell.zig       # Shell command execution
 │       │   └── file-system.zig # File operations (read, write, copy, delete)
-│       └── naselaska/
-│           ├── root.zig        # NaseLaska game engine
-│           └── map.zig         # Game map data and persistence
+│       └── naselaska/          # NaseLaska subproject (integrated GUI/game mode)
+│           ├── build.zig       # NaseLaska build configuration
+│           ├── build.zig.zon   # NaseLaska dependencies
+│           ├── local.sh        # Build helper script
+│           ├── README.md       # NaseLaska documentation
+│           ├── src/
+│           │   ├── main.zig              # NaseLaska entry point
+│           │   ├── root.zig              # Main NaseLaska struct
+│           │   └── lib/
+│           │       ├── audio-handler.zig # Audio system
+│           │       ├── camera.zig        # Camera 2D controls
+│           │       ├── canvas.zig        # Canvas/viewport
+│           │       ├── input-handler.zig # Keyboard input
+│           │       ├── main-menu.zig     # Menu system
+│           │       ├── map.zig           # Map rendering
+│           │       ├── player.zig        # Player entity
+│           │       ├── timer.zig         # Timing utilities
+│           │       └── utils.zig         # Utility functions
+│           └── data/
+│               ├── audio/        # Audio assets (music, sfx)
+│               ├── fonts/        # Font assets
+│               └── maps/         # Map files (.z format)
 ├── zig-out/
 │   └── bin/
 │       └── mellon         # Compiled executable
