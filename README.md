@@ -1,206 +1,403 @@
 # Mellon
 
-Mellon is a small interactive shell written in Zig. It runs as a REPL, dispatches a handful of built-in commands, falls back to external programs found in `PATH`, keeps command history, and exposes simple helpers for config, search, benchmarking, and file operations.
+Mellon is an interactive CLI shell written in Zig.
 
-The documentation in this repository now tracks the code that exists today instead of older planned features.
+It provides:
 
-## What Mellon Does
+- a REPL with editable input and persistent history
+- built-in command groups for config, file operations, base64 utilities, benchmarking, and internal dev tests
+- shell fallback for non built-in commands
+- an optional Python build helper toolkit for packaging and cleanup workflows
 
-- interactive terminal REPL
-- configurable prompt and intro screen
-- built-in commands for help, config, search, file operations, and benchmarking
-- shell fallback for non-built-in commands
-- command history saved to `~/.mellon_history`
-- config stored in `~/.mellonrc`
-- optional error logs written under `~/.mellon_logs`
+This README documents the project as it exists in the current codebase.
 
-## Build
+## Table of Contents
 
-Requirements:
+- Overview
+- Prerequisites
+- Setup
+- Build and Run with Zig
+- Build and Run with Custom Python Scripts
+- Mellon CLI Reference
+- Command Options and Examples
+- Runtime Files and Data
+- Project Layout
+- Notes and Current Limitations
+
+## Overview
+
+Core runtime flow:
+
+1. src/main.zig initializes allocator, error handler, config, IO, and Mellon root controller.
+2. src/root.zig dispatches top-level commands.
+3. Command modules in src/lib and src/lib/core execute built-ins.
+4. Unknown commands are passed to shell execution logic.
+
+## Prerequisites
+
+### Required
 
 - Zig 0.15.2 or newer
-- Unix-like terminal environment
-- `rg` in `PATH` if you want to use the `search` command
+- A POSIX-like terminal environment
 
-Build:
+### Optional but Useful
+
+- Python 3.7+ (for custom build scripts in build/)
+- iconutil (for macOS app bundle icon generation)
+- code, nvim, or vim in PATH for editor-based commands
+
+## Setup
+
+1. Clone and enter the repository:
+
+```bash
+git clone <your-repo-url>
+cd mellon
+```
+
+2. Verify Zig:
+
+```bash
+zig version
+```
+
+3. Optional Python environment for build scripts:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r build/requirements.txt
+```
+
+Note: build/requirements.txt currently has no external dependencies.
+
+## Build and Run with Zig
+
+### Build
 
 ```bash
 zig build
 ```
 
-Run:
+### Run
 
 ```bash
 zig build run
 ```
 
-Installed binary path:
-
-```text
-zig-out/bin/mellon
-```
-
-## Starting Mellon
-
-Run Mellon with no arguments to enter the REPL:
+### Pass CLI args through Zig run
 
 ```bash
-mellon
+zig build run -- help
+zig build run -- config set show_intro=false
+zig build run -- fs help
 ```
 
-The prompt defaults to `⚡`. When `show_cwd=true`, the prompt includes the current working directory.
+### Output Binary
 
-The codebase is also structured to route commands passed on the command line through the same top-level controller.
+- macOS/Linux: zig-out/bin/mellon
+- Windows build target: zig-out/bin/mellon.exe
 
-## Top-Level Commands
+## Build and Run with Custom Python Scripts
 
-Mellon recognizes these commands:
+Entry point:
 
-- `help`
-- `exit` or `:q`
-- `repl`
-- `benchmark` or `bench`
-- `config`
-- `file-system` or `fs`
-- `search` or `s`
+```bash
+cd build
+./main.py <command> [key=value ...]
+```
 
-If a command is not built in, Mellon attempts to find it in `PATH` and execute it as a child process.
+You can also run:
 
-## Command Reference
+```bash
+python3 main.py <command> [key=value ...]
+```
 
-### Help
+### Available Python Commands
 
-Show the bundled help page:
+#### 1. build
+
+Builds Mellon, optionally with target packaging.
+
+```bash
+./main.py build
+./main.py build os=macos
+./main.py build os=macos optimize=fast
+./main.py build os=windows optimize=small
+```
+
+Accepted key=value arguments:
+
+- os=macos|windows
+- optimize=safe|fast|small
+
+Behavior:
+
+- runs data preparation hook
+- calls Zig build via build/utils/builders.py
+- optionally creates:
+- Mellon.app for macOS
+- Mellon/ directory package for Windows
+
+macOS bundle requirements:
+
+- iconutil must be available
+- icon PNG set must exist in build/assets/images:
+- icon_16x16.png
+- icon_16x16@2x.png
+- icon_32x32.png
+- icon_32x32@2x.png
+- icon_128x128.png
+- icon_128x128@2x.png
+- icon_256x256.png
+- icon_256x256@2x.png
+- icon_512x512.png
+- icon_512x512@2x.png
+
+#### 2. run
+
+Runs the built binary for the detected OS.
+
+```bash
+./main.py run
+```
+
+It expects:
+
+- ./zig-out/bin/mellon on macOS/Linux
+- ./zig-out/bin/mellon.exe on Windows
+
+#### 3. clean
+
+Deletes build artifacts.
+
+```bash
+./main.py clean
+```
+
+Removes:
+
+- .data
+- Mellon
+- zig-out
+- Mellon.app
+- .zig-cache
+
+#### 4. help
+
+Displays Python build tool help.
+
+```bash
+./main.py help
+```
+
+Important: the help text currently mentions an audio command, but there is no audio command implementation in build/controller.py.
+
+## Mellon CLI Reference
+
+Top-level Mellon commands are routed in src/root.zig.
+
+### Top-Level Commands
+
+| Command     | Aliases | Description                                     |
+| ----------- | ------- | ----------------------------------------------- |
+| help        | none    | Show help text from docs/help.txt               |
+| repl        | none    | Enter REPL mode                                 |
+| exit        | :q      | Exit Mellon                                     |
+| benchmark   | bench   | Time a Mellon command                           |
+| config      | none    | Config management                               |
+| file-system | fs      | File helper command group                       |
+| base64      | none    | Base64 encode/decode command group              |
+| \_dev       | none    | Internal development/testing command group      |
+| other       | n/a     | Shell fallback (runs external commands in PATH) |
+
+## Command Options and Examples
+
+### help
 
 ```text
 help
 ```
 
-### Exit
+### repl
 
-Leave the session:
+```text
+repl
+```
+
+### exit
 
 ```text
 exit
 :q
 ```
 
-### Benchmark
+### benchmark / bench
 
-Benchmark a Mellon-routed command:
-
-```text
-benchmark ls -la
-bench fs read --path=./README.md
-```
-
-Mellon prints elapsed time in milliseconds and nanoseconds.
-
-### Search
-
-Search delegates to ripgrep using `rg --vimgrep`:
+Usage:
 
 ```text
-search prompt
-s FileSystem
+benchmark <command> [args]
+bench <command> [args]
 ```
 
-Notes:
+Examples:
 
-- `rg` must be installed
-- the query string is passed directly to ripgrep
-- output uses ripgrep's vimgrep format
+```text
+benchmark fs read --path=./README.md
+bench base64 encode --input=hello
+```
 
-### Config
+### config
 
-Config lives at `~/.mellonrc`.
-
-Common commands:
+Usage patterns:
 
 ```text
 config
 config edit
+config source
+config set key=value [key=value ...]
+config help
+config -h
+```
+
+Supported config keys in code:
+
+- editor
+- prompt
+- show_intro
+- show_cwd
+
+Config file path:
+
+- ~/.mellonrc
+
+Generated defaults include:
+
+- editor=vim
+- prompt=⚡
+- log_dir=~/.mellon_logs
+- show_cwd=true
+- show_intro=true
+
+Examples:
+
+```text
+config set editor=code
 config set prompt=$
-config set editor=code show_intro=false show_cwd=false
+config set show_intro=false show_cwd=false
 config source
 ```
 
-Config keys handled by the current code:
+### file-system / fs
 
-- `editor`
-- `prompt`
-- `show_intro`
-- `show_cwd`
+Subcommands:
 
-The config file also contains `log_dir`, which Mellon uses for error logs.
+- help
+- read --path=FILE
+- write --path=FILE [--editor=vim|nvim|code]
+- copy --from=SRC --to=DEST
+- delete --path=FILE
+- get_abs --path=PATH
 
-### File System
-
-The file-system command group provides:
+Examples:
 
 ```text
 fs help
 fs read --path=./README.md
 fs write --path=./notes.md --editor=code
 fs copy --from=./a.txt --to=./b.txt
-fs delete --path=./old.txt
-fs get_abs --path=~/projects
+fs delete --path=./old.md
+fs get_abs --path=~/projects/mellon
 ```
 
-Available subcommands:
+Supported file extensions for type-checked operations:
 
-- `help`
-- `read`
-- `write`
-- `copy`
-- `delete`
-- `get_abs`
+- z
+- js
+- md
+- ts
+- txt
+- json
 
-Current limitation:
+### base64
 
-- Mellon only accepts these file extensions for file operations: `js`, `json`, `md`, `ts`, `txt`, `z`
+Subcommands:
+
+- encode
+- decode
+- help or -h
+
+Option:
+
+- --input=VALUE (if omitted, Mellon prompts for input)
+
+Examples:
+
+```text
+base64 encode --input=hello
+base64 decode --input=aGVsbG8=
+base64 help
+```
+
+### \_dev
+
+Internal development command group.
+
+Current subcommand:
+
+- placeholder
+
+Examples:
+
+```text
+_dev
+_dev placeholder
+```
 
 ### Shell Fallback
 
-Examples of commands handled through shell fallback:
+If a command is not recognized as built-in, Mellon checks PATH and executes it.
+
+Examples:
 
 ```text
-pwd
 ls -la
 git status
+pwd
 clear
 ```
 
-Special behaviour exists for:
+## REPL Behavior
 
-- `pwd`
-- `clear`
+Input handling in src/lib/core/io.zig currently supports:
 
-All other non-built-in commands are executed as child processes.
-
-## REPL Behaviour
-
-The REPL currently supports:
-
-- editable input line
 - left and right arrow cursor movement
-- up and down arrow history navigation
-- Ctrl+C to clear the current line
-- colored terminal output
+- up and down history navigation
+- in-line editing and backspace
+- Ctrl+C clears current input line
+- colored output
 
-History details:
+Command history behavior in src/lib/core/history.zig:
 
-- stored at `~/.mellon_history`
-- duplicate consecutive commands are skipped
-- history is capped at 1000 entries
+- stored in ~/.mellon_history
+- consecutive duplicates are not re-added
+- max history length defaults to 1000
 
-## Runtime Files
+## Runtime Files and Data
 
-Mellon creates or uses these files:
+Mellon reads/writes:
 
-- `~/.mellonrc`
-- `~/.mellon_history`
-- `~/.mellon_logs/error.log` and related log files when error logging is enabled
+- ~/.mellonrc for config
+- ~/.mellon_history for REPL history
+- ~/.mellon_logs as error log root (when log writing is active)
+
+Build artifacts:
+
+- .zig-cache/
+- zig-out/
+- Mellon.app/ (macOS build script path)
+- Mellon/ (Windows package folder from Python script)
 
 ## Project Layout
 
@@ -208,462 +405,43 @@ Mellon creates or uses these files:
 mellon/
 ├── build.zig
 ├── build.zig.zon
+├── README.md
 ├── docs/
 │   ├── help.txt
 │   ├── intro.txt
 │   └── file_system_help.txt
-├── src/
-│   ├── main.zig
-│   ├── root.zig
-│   └── lib/
-│       ├── search.zig
-│       └── core/
-│           ├── config.zig
-│           ├── error-handler.zig
-│           ├── file-system.zig
-│           ├── history.zig
-│           ├── io.zig
-│           ├── shell.zig
-│           └── utils.zig
-└── zig-out/
+├── build/
+│   ├── main.py
+│   ├── controller.py
+│   ├── commands/
+│   │   ├── base.py
+│   │   ├── build.py
+│   │   ├── clean.py
+│   │   └── run.py
+│   └── utils/
+│       ├── args.py
+│       ├── builders.py
+│       ├── data_prep.py
+│       └── system.py
+└── src/
+    ├── main.zig
+    ├── root.zig
+    └── lib/
+        ├── base64.zig
+        └── core/
+            ├── _dev.zig
+            ├── config.zig
+            ├── error-handler.zig
+            ├── file-system.zig
+            ├── history.zig
+            ├── io.zig
+            ├── shell.zig
+            └── utils.zig
 ```
 
-## Architecture
-
-High-level flow:
-
-1. `src/main.zig` builds the runtime objects.
-2. `src/root.zig` routes top-level commands.
-3. `src/lib/core/io.zig` manages input, output, colors, and history-aware editing.
-4. `src/lib/core/config.zig` loads and saves `~/.mellonrc`.
-5. `src/lib/core/file-system.zig` implements file helpers.
-6. `src/lib/core/shell.zig` executes external commands.
-7. `src/lib/search.zig` delegates search to ripgrep.
-
-## Documentation Files
-
-If you change user-visible behaviour, update these files together:
-
-- `README.md`
-- `docs/help.txt`
-- `docs/intro.txt`
-- `docs/file_system_help.txt`
-  Mellon.controller() - Routes commands
-  ↓
-  ├─ "exit" / ":q" → Exit program
-  ├─ "file-system" / "fs" → FileSystem.controller()
-  ├─ "help" → Display help
-  ├─ "repl" → Already in REPL mode
-  └─ Other → Shell.controller()
-
-````
-
-## Deeper Dive
-
-### Core Components
-
-#### 1. Main Application (`src/main.zig`)
-
-The entry point initializes the Mellon application and handles command-line arguments:
-
-```zig
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
-    defer _ = gpa.deinit();
-
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
-    const cli_args = if (args.len > 1) args[1..] else &[_][]const u8{};
-
-    // Special mode: NaseLaska game
-    if (args.len > 1 and std.mem.eql(u8, args[1], "naselaska")) {
-        var nase_laska = NaseLaska.init(allocator);
-        defer nase_laska.deinit();
-        nase_laska.start() catch std.debug.print("❌ NaseLaska failed\n\n", .{});
-        return std.process.exit(0);
-    }
-
-    var config = Config.init(allocator);
-    defer config.deinit();
-
-    var stdin_buffer: [1024]u8 = undefined;
-    var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-    var stdin_reader = std.fs.File.stdin().readerStreaming(&stdin_buffer);
-    var io = IO.init(allocator, &stdin_reader, &stdout_writer, &config);
-    defer io.deinit();
-
-    var mellon = Mellon.init(&io, &config);
-    defer mellon.deinit();
-    return try mellon.run(cli_args);
-}
-````
-
-#### 2. Root Module (`src/root.zig`)
-
-The `Mellon` struct is the core orchestrator:
-
-- **`init()`**: Initializes IO, Shell, and FileSystem modules
-- **`run(args[])`**: Accepts command-line arguments; enters REPL mode if no args, otherwise executes CLI command
-- **`repl()`**: Interactive REPL loop that continuously reads and processes commands
-- **`controller()`**: Routes commands to appropriate handlers
-- **`deinit()`**: Cleanup and resource deallocation
-
-The `run()` method determines execution mode:
-
-- **No arguments**: Enters REPL mode via `repl()`
-- **"repl" command**: Explicitly enters REPL mode via `repl()`
-- **Other arguments**: Executes as CLI command and exits
-
-### Command System
-
-Mellon recognizes these built-in commands:
-
-| Command       | Aliases | Function                      |
-| ------------- | ------- | ----------------------------- |
-| `benchmark`   | `bench` | Run a timed command           |
-| `exit`        | `:q`    | Exit the application          |
-| `file-system` | `fs`    | Access file system operations |
-| `config`      | -       | Configure prompt/editor/intro |
-| `help`        | -       | Display help information      |
-| `repl`        | -       | Enter interactive REPL mode   |
-| `naselaska`   | -       | Launch NaseLaska GUI mode     |
-| `(other)`     | -       | Passed to shell executor      |
-
-`help` prints the contents of `docs/help.txt`.
-If `show_intro` is enabled, REPL startup displays `docs/intro.txt`.
-
-#### Shell Commands
-
-Any command not recognized as a built-in is forwarded to the shell:
-
-```
-⚡ pwd
-/Users/davidcharles/repos/mellon
-
-⚡ ls -la
-total 24
-...
-
-⚡ whoami
-davidcharles
-```
-
-#### File System Commands
-
-_The default text editor is Vim, but you can choose Nvim or VS Code when prompted._
-
-Access file operations via `fs` or `file-system`:
-
-```
-⚡ fs read --path=./README.md
-⚡ fs write --path=./newfile.txt --editor=nvim
-⚡ fs copy --from=./file1.txt --to=./file2.txt
-⚡ fs delete --path=./oldfile.txt
-⚡ fs get_abs --path=~/Documents
-```
-
-### Module Details
-
-#### IO Module (`src/lib/io.zig`)
-
-Provides colored output and input handling:
-
-- **`Clr` enum**: Color definitions (Blue, Cyan, Green, Magenta, Red, White, Yellow)
-- **`print(msg, color)`**: Print colored messages using ANSI escape codes
-- **`deinit()`**: Flush output buffer
-
-Color output uses standard ANSI escape sequences:
-
-```
-\x1b[34m  (Blue)
-\x1b[32m  (Green)
-\x1b[31m  (Red)
-\x1b[0m   (Reset)
-```
-
-Example usage:
-
-```zig
-try io.print("✅ Success!", .Green);
-try io.print("❌ Error!", .Red);
-```
-
-#### History Module (`src/lib/core/history.zig`)
-
-Manages command history with persistent storage:
-
-- **Persistent Storage**: Automatically saves to `~/.mellon_history`
-- **Arrow Navigation**: Use ↑/↓ to navigate through previous commands
-- **Deduplication**: Consecutive duplicate commands are not stored
-- **Size Limit**: Default maximum of 1000 commands (configurable)
-- **Auto-save**: History is saved after each command for durability
-
-History features:
-
-- Loads on startup from `~/.mellon_history`
-- Saves on exit and after each command
-- Trims old entries when max size is reached
-- Preserves history across sessions
-
-#### Shell Module (`src/lib/shell.zig`)
-
-Executes shell commands:
-
-- **`clear()`**: Clear the terminal screen
-- **`pwd()`**: Print working directory (with `-L` flag for logical paths)
-- **`controller(command, args)`**: Execute arbitrary shell commands
-- **`openEditor(editor, path)`**: Open file in specified editor (Nvim or VS Code)
-
-Key features:
-
-- Validates commands exist in PATH before execution
-- Uses `std.process.Child` to spawn and wait for processes
-- Supports argument parsing and passing
-
-Implementation detail - command validation:
-
-```zig
-fn getCommandIsInPATH(command: []const u8) ![]const u8
-```
-
-This function searches Unix PATH to ensure the command exists before execution.
-
-#### FileSystem Module (`src/lib/file-system.zig`)
-
-Handles file operations:
-
-- **`read(path)`**: Read and display file contents
-- **`write(path, editor)`**: Create file in editor (Nvim or VS Code)
-- **`copy(from, to)`**: Copy files between locations
-- **`delete(path)`**: Remove files
-- **`getAbs(path)`**: Convert relative paths to absolute paths
-
-Path handling features:
-
-- Supports `~` expansion (home directory)
-- Supports relative paths (`.`, `..`)
-- Supports absolute paths (`/path/to/file`)
-- Validates file types (`.txt`, `.md`, `.json`, `.js`, `.ts`)
-- Rejects files larger than 10MB when reading
-
-Example absolute path conversion:
-
-```
-~/Documents/file.md → /Users/davidcharles/Documents/file.md
-../config.json → /Users/davidcharles/projects/config.json
-./data.txt → /Users/davidcharles/repos/mellon/data.txt
-```
-
-## Configuration
-
-Mellon reads configuration from `~/.mellonrc` on startup. You can edit it directly or use the `config` command.
-
-Supported keys:
-
-- `editor` (vim, nvim, code)
-- `prompt` (single token; spaces are not supported)
-- `show_intro` (true/false)
-- `show_cwd` (true/false)
-
-Example:
-
-```
-# ~/.mellonrc
-editor=vim
-prompt=⚡
-show_intro=true
-show_cwd=true
-```
-
-## Using the Binary
-
-Once you've built Mellon, you can install it globally for easy access.
-
-### Adding to PATH
-
-The compiled binary is located at `zig-out/bin/mellon`. You have two options:
-
-#### Option 1: Copy to System Binary Directory (Recommended)
-
-```bash
-sudo cp zig-out/bin/mellon /usr/local/bin/
-```
-
-Verify installation:
-
-```bash
-which mellon
-mellon
-```
-
-#### Option 2: Add Project Directory to PATH
-
-Edit your shell configuration file (`.zshrc` for Zsh):
-
-```bash
-# Open the file
-nano ~/.zshrc
-
-# Add this line
-export PATH="/Users/davidcharles/repos/mellon/zig-out/bin:$PATH"
-
-# Save and reload
-source ~/.zshrc
-```
-
-### Creating Aliases
-
-Aliases make it even easier to launch Mellon. Add these to your `~/.zshrc`:
-
-#### Simple Aliases
-
-```bash
-# Open ~/.zshrc
-nano ~/.zshrc
-
-# Add these lines
-alias mellon="/usr/local/bin/mellon"
-alias m="mellon"                    # Quick access to REPL
-alias mls="mellon ls"               # Quick ls command
-alias mpwd="mellon pwd"             # Quick pwd command
-alias mfs="mellon fs"               # Quick file system access
-
-# Reload configuration
-source ~/.zshrc
-```
-
-#### Usage with Aliases
-
-```bash
-# REPL mode
-m
-
-# CLI mode with aliases
-mls -la
-mpwd
-mfs read --path=./README.md
-```
-
-### Running Mellon
-
-After setup, you can use Mellon in two ways:
-
-#### Interactive REPL Mode
-
-Simply type `mellon` with no arguments:
-
-```bash
-mellon
-```
-
-You'll see the Mellon prompt:
-
-```
-⚡
-```
-
-Type commands to interact:
-
-```
-⚡ pwd
-/Users/davidcharles/repos/mellon
-
-⚡ ls
-build.zig               src
-build.zig.zon           zig-out
-README.md
-
-⚡ fs read --path=./README.md
-
-⚡ exit
-Goodbye! 👋
-```
-
-#### CLI Command Mode
-
-Execute commands directly without entering REPL:
-
-```bash
-mellon pwd
-/Users/davidcharles/repos/mellon
-
-mellon ls -la
-total 32
-drwxr-xr-x  7 user  group  224 Feb 21 10:30 .
-drwxr-xr-x  3 user  group   96 Feb 21 09:15 ..
-...
-
-mellon fs read --path=./README.md
-[file contents]
-```
-
-Use your alias for quick access:
-
-```bash
-m pwd
-m ls
-m fs read --path=./file.txt
-```
-
-## Development
-
-To rebuild after making changes:
-
-```bash
-zig build
-```
-
-To run with debug output:
-
-```bash
-zig build run
-```
-
-To format code:
-
-```bash
-zig fmt src/
-```
-
-## Performance
-
-Mellon is optimized for performance:
-
-- **Compiled Language**: Zig compiles to native machine code
-- **Minimal Runtime**: Zero garbage collection overhead
-- **Efficient Memory**: Stack allocation for buffers where possible
-- **Fast Startup**: Instant initialization and command processing
-
-## Troubleshooting
-
-### Binary not found after adding to PATH
-
-- Verify the binary exists: `ls -la zig-out/bin/mellon`
-- Reload your shell: `source ~/.zshrc`
-- Check PATH variable: `echo $PATH`
-
-### Permission denied when running mellon
-
-```bash
-chmod +x /usr/local/bin/mellon
-```
-
-### Build fails
-
-- Ensure Zig is installed: `zig version`
-- Update Zig to the latest version
-- Clear build cache: `rm -rf .zig-cache zig-out && zig build`
-
-## License
-
-Mellon is an open-source project. Check LICENSE file for details.
-
-## Contributing
-
-Contributions are welcome! Please ensure code follows Zig conventions and passes `zig fmt`.
-
----
-
-**Happy coding with Mellon! 🧙‍♂️**
+## Notes and Current Limitations
+
+- Some docs files in docs/ may lag behind current command routing when code changes quickly.
+- Python build helper help output currently lists an audio command that is not wired in the controller.
+- File-type validation limits file-system operations to a specific extension set.
+- base64 help text in code still contains placeholder wording and may be refined later.
