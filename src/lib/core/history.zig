@@ -11,9 +11,7 @@ pub const History = struct {
 
     pub fn init(alloc: std.mem.Allocator, Err: *ErrorHandler) History {
         const home = std.posix.getenv("HOME") orelse "~";
-        const history_path = std.fmt.allocPrint(alloc, "{s}/.mellon_history", .{home}) catch |err| {
-            Err.handler(err, "Failed to allocate memory for history file path\n\n", true, true);
-        };
+        const history_path = std.fmt.allocPrint(alloc, "{s}/.mellon_history", .{home}) catch "";
         var history = History{
             .Err = Err,
             .allocator = alloc,

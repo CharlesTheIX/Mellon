@@ -28,7 +28,7 @@ pub const Mellon = struct {
             ._dev = _Dev.init(Err, io),
             .shell = Shell.init(io, Err),
             .fs = FS.init(io, config, Err),
-            .base64 = Base64.init(allocator, io, Err),
+            .base64 = Base64.init(allocator, io, Err, config),
         };
     }
 
@@ -39,9 +39,7 @@ pub const Mellon = struct {
         const joined_args = std.mem.join(std.heap.page_allocator, " ", args) catch "";
         const cmd_args = if (args.len > 1) joined_args else "";
         defer if (cmd_args.len > 0) std.heap.page_allocator.free(cmd_args);
-        self.controller(cmd, cmd_args) catch |err| {
-            return self.Err.handle(err, "An error occurred while running command\n\n", true, true);
-        };
+        self.controller(cmd, cmd_args);
     }
 
     // Methods
@@ -52,7 +50,7 @@ pub const Mellon = struct {
         const cmd_args = parts.rest();
         if (cmd.len == 0) return self.io.print("Usage: benchmark <command> [args]\n\n", .Yellow);
         const start = std.time.nanoTimestamp();
-        try self.controller(cmd, cmd_args);
+        self.controller(cmd, cmd_args);
         const end = std.time.nanoTimestamp();
         const elapsed_ns: u64 = if (end >= start) @as(u64, @intCast(end - start)) else 0;
         const elapsed_ms = @as(u64, elapsed_ns / std.time.ns_per_ms);
@@ -110,15 +108,17 @@ pub const Mellon = struct {
         self.io.print("\n\n", .White);
     }
 
-    fn printIntro(self: *Mellon) !void {
+    fn printIntro(self: *Mellon) void {
         clear();
-        const content = try readFile("./docs/intro.txt");
+        const content = readFile("./docs/intro.txt") catch |err| {
+            return self.Err.handle(err, "Failed to read intro content\n\n", false, true);
+        };
         self.io.print(content, .Green);
         self.io.print("\n\n", .White);
     }
 
     fn repl(self: *Mellon) void {
-        if (self.config.show_intro) try self.printIntro();
+        if (self.config.show_intro) self.printIntro();
         while (true) {
             const prompt = if (self.config.getFullPrompt()) |full_prompt| full_prompt else "mellon> ";
             defer self.config.allocator.free(prompt);

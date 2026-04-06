@@ -88,8 +88,9 @@ pub const Config = struct {
     }
 
     fn help(self: *Config) void {
+        _ = self;
         const help_message = "Usage: config [command] [options]\n\nCommands:\n  set --key=value [--key=value ...]   Set multiple config values at once\n  edit                                Open the config file in the editor\n  source                              Reload the config from the file\n\nOptions:\n  --key=value                        Set a specific config value (used with 'set' command)\n\nConfig Keys:\n  editor                              The editor to use for editing files (default: vim)\n  prompt                              The prompt symbol to use (default: ⚡)\n  log_dir                             Directory to store log files (default: ~/.mellon_logs)\n  show_cwd                            Whether to show the current working directory in the prompt (default: true)\n  show_intro                          Whether to show the intro message on startup (default: true)\n";
-        self.io.print(help_message, .Yellow);
+        std.debug.print(help_message, .{});
     }
 
     fn load(self: *Config) !void {
@@ -135,7 +136,7 @@ pub const Config = struct {
     fn set(self: *Config, key: []const u8, value: []const u8) !void {
         if (value.len == 0) return error.InvalidCommand;
         if (std.mem.eql(u8, key, "editor")) {
-            const new = self.allocator.dupe(u8, value);
+            const new = try self.allocator.dupe(u8, value);
             self.allocator.free(self.editor);
             self.editor = new;
             return;
