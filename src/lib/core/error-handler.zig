@@ -9,7 +9,7 @@ pub const ErrorHandler = struct {
         return ErrorHandler{ .allocator = allocator };
     }
 
-    // Instance Methods
+    // Methods
     pub fn handle(self: *ErrorHandler, err: anyerror, details: []const u8, fatal: bool, log_err: ?bool) void {
         var msg: []const u8 = "";
         switch (err) {
@@ -25,7 +25,6 @@ pub const ErrorHandler = struct {
         }
         const timestamp = @divTrunc(std.time.timestamp(), 1000); // seconds
         std.debug.print("❌ [{d}] Error: {s}\nMessage: {s}\nDetails: {s}\n\n", .{ timestamp, @errorName(err), msg, details });
-
         if (log_err orelse false) {
             const log_message = std.fmt.allocPrint(
                 self.allocator,
@@ -39,18 +38,16 @@ pub const ErrorHandler = struct {
             defer self.allocator.free(log_message);
             self.log(log_message, "error") catch std.debug.print("❌ Failed to log error\n\n", .{});
         }
-
         if (fatal) std.process.exit(1);
     }
 
-    // Private Methods
     fn log(self: *ErrorHandler, message: []const u8, log_name: ?[]const u8) !void {
         const log_dir = self.log_dir orelse return error.NoLogDir;
         if (log_dir.len == 0) return error.NoLogDir;
         const name = log_name orelse "log";
         const log_path = try std.fmt.allocPrint(self.allocator, "{s}/{s}.log", .{ log_dir, name });
         defer self.allocator.free(log_path);
-        const current_content = readFile(log_path) catch "";
+        const current_content = try readFile(log_path);
         const new_content = try std.fmt.allocPrint(self.allocator, "{s}\n{s}", .{ current_content, message });
         const file = try std.fs.createFileAbsolute(log_path, .{});
         defer file.close();

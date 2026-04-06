@@ -104,33 +104,33 @@ pub fn readFile(path: []const u8) ![]const u8 {
 
 // Enums
 pub const Clr = enum {
+    Red,
     Blue,
     Cyan,
     Green,
-    Magenta,
-    Red,
     White,
-    Yellow,
     Reset,
+    Yellow,
+    Magenta,
 
     pub fn code(self: Clr) []const u8 {
         return switch (self) {
+            .Red => "\x1b[31m",
             .Blue => "\x1b[34m",
             .Cyan => "\x1b[36m",
+            .Reset => "\x1b[0m",
             .Green => "\x1b[32m",
-            .Magenta => "\x1b[35m",
-            .Red => "\x1b[31m",
             .White => "\x1b[37m",
             .Yellow => "\x1b[33m",
-            .Reset => "\x1b[0m",
+            .Magenta => "\x1b[35m",
         };
     }
 };
 
 pub const Editor = enum {
+    Vim,
     Nano,
     Nvim,
-    Vim,
     VsCode,
     Invalid,
 
@@ -144,31 +144,28 @@ pub const Editor = enum {
 };
 
 pub const FileType = enum {
+    Z,
     JS,
-    JSON,
     MD,
     TS,
     Txt,
-    Z,
+    JSON,
     Invalid,
 
     pub fn get(path: []const u8) FileType {
         if (path.len == 0) return .Invalid;
-
         var path_parts = std.mem.splitSequence(u8, path, "/");
         var file_name: []const u8 = undefined;
         while (path_parts.next()) |part| file_name = part;
-
         var file_name_parts = std.mem.splitSequence(u8, file_name, ".");
         var file_type: []const u8 = "";
         while (file_name_parts.next()) |part| file_type = part;
-
+        if (std.mem.eql(u8, file_type, "z")) return .Z;
         if (std.mem.eql(u8, file_type, "js")) return .JS;
-        if (std.mem.eql(u8, file_type, "json")) return .JSON;
         if (std.mem.eql(u8, file_type, "md")) return .MD;
         if (std.mem.eql(u8, file_type, "ts")) return .TS;
         if (std.mem.eql(u8, file_type, "txt")) return .Txt;
-        if (std.mem.eql(u8, file_type, "z")) return .Z;
+        if (std.mem.eql(u8, file_type, "json")) return .JSON;
         return .Invalid;
     }
 };

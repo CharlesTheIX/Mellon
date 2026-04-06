@@ -19,7 +19,7 @@ pub fn main() void {
     var stdin_reader = std.fs.File.stdin().readerStreaming(&stdin_buffer);
     var io = IO.init(allocator, &stdin_reader, &stdout_writer, &config, &Err);
     defer io.deinit();
-    var mellon = Mellon.init(&io, &config, &Err);
+    var mellon = Mellon.init(allocator, &io, &config, &Err);
 
     const args = std.process.argsAlloc(allocator) catch |err| {
         return Err.handle(err, "Failed to allocate memory for command line arguments\n\n", true, true);

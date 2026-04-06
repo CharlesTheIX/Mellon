@@ -19,7 +19,6 @@ pub const FileSystem = struct {
         return FileSystem{ .io = io, .config = config, .Err = Err };
     }
 
-    // Instances Methods
     pub fn controller(self: *FileSystem, args: []const u8) void {
         if (args.len == 0) return self.help() catch |err| {
             return self.Err.handle(err, "Failed to show file system help\n\n", false, true);
@@ -68,7 +67,7 @@ pub const FileSystem = struct {
         }
     }
 
-    // Private Methods
+    // Methods
     fn copy(self: *FileSystem, args: []const u8) !void {
         var to: []const u8 = "";
         var from: []const u8 = "";
@@ -79,12 +78,12 @@ pub const FileSystem = struct {
                 var key_value = std.mem.splitSequence(u8, part, "=");
                 const key = key_value.first();
                 const value = key_value.rest();
-                if (std.mem.eql(u8, key, "--from") or std.mem.eql(u8, key, "--f")) from = value;
-                if (std.mem.eql(u8, key, "--to") or std.mem.eql(u8, key, "--t")) to = value;
+                if (std.mem.eql(u8, key, "--from")) from = value;
+                if (std.mem.eql(u8, key, "--to")) to = value;
             } else continue;
         }
         while (from.len == 0) {
-            const msg = std.fmt.allocPrint(std.heap.page_allocator, "📂 From {s} ", .{self.config.prompt}) catch "";
+            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📂 From {s} ", .{self.config.prompt});
             self.io.print(msg, .Green);
             var buffer: [1024]u8 = undefined;
             var stdin_reader = std.fs.File.stdin().readerStreaming(&buffer);
@@ -92,7 +91,7 @@ pub const FileSystem = struct {
             from = line;
         }
         while (to.len == 0) {
-            const msg = std.fmt.allocPrint(std.heap.page_allocator, "📂 To {s} ", .{self.config.prompt}) catch "";
+            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📂 To {s} ", .{self.config.prompt});
             self.io.print(msg, .Green);
             var buffer: [1024]u8 = undefined;
             var stdin_reader = std.fs.File.stdin().readerStreaming(&buffer);
@@ -122,7 +121,7 @@ pub const FileSystem = struct {
                 var key_value = std.mem.splitSequence(u8, part, "=");
                 const key = key_value.first();
                 const value = key_value.rest();
-                if (std.mem.eql(u8, key, "--path") or std.mem.eql(u8, key, "--p")) path = value;
+                if (std.mem.eql(u8, key, "--path")) path = value;
             } else continue;
         }
         while (path.len == 0) {
@@ -148,7 +147,7 @@ pub const FileSystem = struct {
                 var key_value = std.mem.splitSequence(u8, part, "=");
                 const key = key_value.first();
                 const value = key_value.rest();
-                if (std.mem.eql(u8, key, "--path") or std.mem.eql(u8, key, "--p")) path = value;
+                if (std.mem.eql(u8, key, "--path")) path = value;
             } else continue;
         }
         while (path.len == 0) {
@@ -176,7 +175,7 @@ pub const FileSystem = struct {
                 var key_value = std.mem.splitSequence(u8, part, "=");
                 const key = key_value.first();
                 const value = key_value.rest();
-                if (std.mem.eql(u8, key, "--path") or std.mem.eql(u8, key, "--p")) path = value;
+                if (std.mem.eql(u8, key, "--path")) path = value;
             } else continue;
         }
         while (path.len == 0) {
@@ -199,8 +198,8 @@ pub const FileSystem = struct {
                 var key_value = std.mem.splitSequence(u8, part, "=");
                 const key = key_value.first();
                 const value = key_value.rest();
-                if (std.mem.eql(u8, key, "--path") or std.mem.eql(u8, key, "--p")) path = value;
-                if (std.mem.eql(u8, key, "--editor") or std.mem.eql(u8, key, "--e")) editor = Editor.get(value);
+                if (std.mem.eql(u8, key, "--path")) path = value;
+                if (std.mem.eql(u8, key, "--editor")) editor = Editor.get(value);
             } else continue;
         }
         while (path.len == 0) {
@@ -224,20 +223,20 @@ pub const FileSystem = struct {
 
 const Fn = enum {
     Copy,
-    Delete,
-    GetAbs,
     Help,
     Read,
     Write,
+    Delete,
+    GetAbs,
     Invalid,
 
     fn get(string: []const u8) Fn {
-        if (std.mem.eql(u8, string, "copy") or std.mem.eql(u8, string, "-cp")) return .Copy;
-        if (std.mem.eql(u8, string, "delete") or std.mem.eql(u8, string, "-d")) return .Delete;
-        if (std.mem.eql(u8, string, "get_abs") or std.mem.eql(u8, string, "-abs")) return .GetAbs;
+        if (std.mem.eql(u8, string, "copy")) return .Copy;
+        if (std.mem.eql(u8, string, "read")) return .Read;
+        if (std.mem.eql(u8, string, "write")) return .Write;
+        if (std.mem.eql(u8, string, "delete")) return .Delete;
+        if (std.mem.eql(u8, string, "get_abs")) return .GetAbs;
         if (std.mem.eql(u8, string, "help") or std.mem.eql(u8, string, "-h")) return .Help;
-        if (std.mem.eql(u8, string, "read") or std.mem.eql(u8, string, "-r")) return .Read;
-        if (std.mem.eql(u8, string, "write") or std.mem.eql(u8, string, "-w")) return .Write;
         return .Invalid;
     }
 };

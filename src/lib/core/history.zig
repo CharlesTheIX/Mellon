@@ -11,7 +11,9 @@ pub const History = struct {
 
     pub fn init(alloc: std.mem.Allocator, Err: *ErrorHandler) History {
         const home = std.posix.getenv("HOME") orelse "~";
-        const history_path = std.fmt.allocPrint(alloc, "{s}/.mellon_history", .{home}) catch "";
+        const history_path = std.fmt.allocPrint(alloc, "{s}/.mellon_history", .{home}) catch |err| {
+            Err.handler(err, "Failed to allocate memory for history file path\n\n", true, true);
+        };
         var history = History{
             .Err = Err,
             .allocator = alloc,
@@ -22,7 +24,7 @@ pub const History = struct {
         return history;
     }
 
-    // Instance Methods
+    // Methods
     pub fn add(self: *History, command: []const u8) void {
         if (command.len == 0) return;
         if (self.commands.items.len > 0) {
@@ -56,33 +58,6 @@ pub const History = struct {
         if (self.history_path.len > 0) self.allocator.free(self.history_path);
     }
 
-    pub fn navigateDown(self: *History) ?[]const u8 {
-        if (self.current_index) |idx| {
-            if (idx < self.commands.items.len - 1) {
-                self.current_index = idx + 1;
-                return self.commands.items[self.current_index.?];
-            } else {
-                self.current_index = null;
-                return "";
-            }
-        }
-        return null;
-    }
-
-    pub fn navigateUp(self: *History) ?[]const u8 {
-        if (self.commands.items.len == 0) return null;
-        if (self.current_index) |idx| {
-            if (idx > 0) self.current_index = idx - 1;
-        } else self.current_index = self.commands.items.len - 1;
-        if (self.current_index) |idx| return self.commands.items[idx];
-        return null;
-    }
-
-    pub fn reset(self: *History) void {
-        self.current_index = null;
-    }
-
-    // Private Methods
     fn load(self: *History) !void {
         if (self.history_path.len == 0) return error.NoConfigPath;
         const file = try std.fs.openFileAbsolute(self.history_path, .{ .mode = .read_only });
@@ -108,6 +83,32 @@ pub const History = struct {
             const first = self.commands.orderedRemove(0);
             self.allocator.free(first);
         }
+    }
+
+    pub fn navigateDown(self: *History) ?[]const u8 {
+        if (self.current_index) |idx| {
+            if (idx < self.commands.items.len - 1) {
+                self.current_index = idx + 1;
+                return self.commands.items[self.current_index.?];
+            } else {
+                self.current_index = null;
+                return "";
+            }
+        }
+        return null;
+    }
+
+    pub fn navigateUp(self: *History) ?[]const u8 {
+        if (self.commands.items.len == 0) return null;
+        if (self.current_index) |idx| {
+            if (idx > 0) self.current_index = idx - 1;
+        } else self.current_index = self.commands.items.len - 1;
+        if (self.current_index) |idx| return self.commands.items[idx];
+        return null;
+    }
+
+    pub fn reset(self: *History) void {
+        self.current_index = null;
     }
 
     fn save(self: *const History) !void {

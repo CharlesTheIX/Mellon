@@ -1,6 +1,7 @@
 const std = @import("std");
 pub const IO = @import("./lib/core/io.zig").IO;
-const Search = @import("./lib/search.zig").Search;
+const _Dev = @import("./lib/core/_dev.zig")._Dev;
+const Base64 = @import("./lib/base64.zig").Base64;
 const Shell = @import("./lib/core/shell.zig").Shell;
 const clear = @import("./lib/core/utils.zig").clear;
 pub const Config = @import("./lib/core/config.zig").Config;
@@ -11,34 +12,30 @@ const readFile = @import("./lib/core/utils.zig").readFile;
 pub const Mellon = struct {
     fs: FS,
     io: *IO,
+    _dev: _Dev,
     shell: Shell,
-    search: Search,
+    base64: Base64,
     config: *Config,
     Err: *ErrorHandler,
+    allocator: std.mem.Allocator,
 
-    pub fn init(io: *IO, config: *Config, Err: *ErrorHandler) Mellon {
-        const search = Search.init(Err);
-        const shell = Shell.init(io, Err);
-        const fs = FS.init(io, config, Err);
+    pub fn init(allocator: std.mem.Allocator, io: *IO, config: *Config, Err: *ErrorHandler) Mellon {
         return Mellon{
             .io = io,
-            .fs = fs,
-            .shell = shell,
-            .search = search,
             .config = config,
             .Err = Err,
+            .allocator = allocator,
+            ._dev = _Dev.init(Err, io),
+            .shell = Shell.init(io, Err),
+            .fs = FS.init(io, config, Err),
+            .base64 = Base64.init(allocator, io, Err),
         };
     }
 
-    // Instance Methods
     pub fn run(self: *Mellon, args: []const []const u8) void {
-        if (args.len == 0) return self.repl() catch |err| {
-            return self.Err.handle(err, "An error occurred while running REPL\n\n", true, true);
-        };
+        if (args.len == 0) return self.repl();
         const cmd = args[0];
-        if (std.mem.eql(u8, cmd, "repl")) return self.repl() catch |err| {
-            return self.Err.handle(err, "An error occurred while running REPL\n\n", true, true);
-        };
+        if (std.mem.eql(u8, cmd, "repl")) return self.repl();
         const joined_args = std.mem.join(std.heap.page_allocator, " ", args) catch "";
         const cmd_args = if (args.len > 1) joined_args else "";
         defer if (cmd_args.len > 0) std.heap.page_allocator.free(cmd_args);
@@ -47,7 +44,7 @@ pub const Mellon = struct {
         };
     }
 
-    // Private Methods
+    // Methods
     fn benchmark(self: *Mellon, args: []const u8) !void {
         if (args.len == 0) return self.io.print("Usage: benchmark <command> [args]\n\n", .Yellow);
         var parts = std.mem.splitSequence(u8, args, " ");
@@ -68,16 +65,21 @@ pub const Mellon = struct {
         self.io.print(msg, .Cyan);
     }
 
-    fn controller(self: *Mellon, cmd: []const u8, args: []const u8) anyerror!void {
+    fn controller(self: *Mellon, cmd: []const u8, args: []const u8) void {
         const command = Cmd.get(cmd);
         switch (command) {
-            .Benchmark => return try benchmark(self, args),
-            .Config => return self.config.controller(args),
-            .Exit => return try self.exit(200),
-            .FileSystem => return self.fs.controller(args),
-            .Help => return try self.help(),
             .Repl => return,
-            .Search => return self.search.controller(args),
+            .Help => return self.help(),
+            ._Dev => return self._dev.controller(args),
+            .Config => return self.config.controller(args),
+            .FileSystem => return self.fs.controller(args),
+            .Base64 => return self.base64.controller(args),
+            .Exit => return self.exit(200) catch |err| {
+                return self.Err.handle(err, "An error occurred while exiting\n\n", true, true);
+            },
+            .Benchmark => return benchmark(self, args) catch |err| {
+                return self.Err.handle(err, "An error occurred while running benchmark\n\n", true, true);
+            },
             .Invalid => return self.shell.controller(cmd, args),
         }
     }
@@ -99,9 +101,11 @@ pub const Mellon = struct {
         std.process.exit(status);
     }
 
-    fn help(self: *Mellon) !void {
+    fn help(self: *Mellon) void {
         clear();
-        const content = try readFile("./docs/help.txt");
+        const content = readFile("./docs/help.txt") catch |err| {
+            return self.Err.handle(err, "Failed to read help content\n\n", false, true);
+        };
         self.io.print(content, .Green);
         self.io.print("\n\n", .White);
     }
@@ -113,10 +117,10 @@ pub const Mellon = struct {
         self.io.print("\n\n", .White);
     }
 
-    fn repl(self: *Mellon) !void {
+    fn repl(self: *Mellon) void {
         if (self.config.show_intro) try self.printIntro();
         while (true) {
-            const prompt = self.config.getFullPrompt();
+            const prompt = if (self.config.getFullPrompt()) |full_prompt| full_prompt else "mellon> ";
             defer self.config.allocator.free(prompt);
             self.io.print(prompt, .Green);
             var buffer: [1024]u8 = undefined;
@@ -126,29 +130,31 @@ pub const Mellon = struct {
             var commands = std.mem.splitSequence(u8, line, " ");
             const command = commands.first();
             const args = commands.rest();
-            try self.controller(command, args);
+            self.controller(command, args);
         }
     }
 };
 
 const Cmd = enum {
-    Benchmark,
-    Config,
+    _Dev,
     Exit,
-    FileSystem,
-    Help,
     Repl,
-    Search,
+    Help,
+    Config,
+    Base64,
+    Benchmark,
+    FileSystem,
     Invalid,
 
     fn get(string: []const u8) Cmd {
-        if (std.mem.eql(u8, string, "benchmark") or std.mem.eql(u8, string, "bench")) return .Benchmark;
-        if (std.mem.eql(u8, string, "config")) return .Config;
-        if (std.mem.eql(u8, string, "exit") or std.mem.eql(u8, string, ":q")) return .Exit;
-        if (std.mem.eql(u8, string, "file-system") or std.mem.eql(u8, string, "fs")) return .FileSystem;
+        if (std.mem.eql(u8, string, "_dev")) return ._Dev;
         if (std.mem.eql(u8, string, "help")) return .Help;
         if (std.mem.eql(u8, string, "repl")) return .Repl;
-        if (std.mem.eql(u8, string, "search") or std.mem.eql(u8, string, "s")) return .Search;
+        if (std.mem.eql(u8, string, "config")) return .Config;
+        if (std.mem.eql(u8, string, "base64")) return .Base64;
+        if (std.mem.eql(u8, string, "exit") or std.mem.eql(u8, string, ":q")) return .Exit;
+        if (std.mem.eql(u8, string, "benchmark") or std.mem.eql(u8, string, "bench")) return .Benchmark;
+        if (std.mem.eql(u8, string, "file-system") or std.mem.eql(u8, string, "fs")) return .FileSystem;
         return .Invalid;
     }
 };

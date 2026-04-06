@@ -24,17 +24,60 @@ pub const IO = struct {
         return IO{ .reader = reader, .writer = writer, .history = history, .config = config, .Err = Err };
     }
 
-    // Instance Methods
     pub fn deinit(self: *IO) void {
         self.history.deinit();
         self.writer.interface.flush() catch {};
     }
 
+    // Methods
+    fn clear(self: *IO) void {
+        self.len = 0;
+        self.cursor_pos = 0;
+    }
+
+    fn deleteChar(self: *IO) void {
+        if (self.cursor_pos > 0 and self.len > 0) {
+            if (self.cursor_pos < self.len) {
+                std.mem.copyForwards(
+                    u8,
+                    self.buffer[self.cursor_pos - 1 .. self.len - 1],
+                    self.buffer[self.cursor_pos..self.len],
+                );
+            }
+            self.len -= 1;
+            self.cursor_pos -= 1;
+        }
+    }
+
+    fn getSlice(self: *IO) []const u8 {
+        return self.buffer[0..self.len];
+    }
+
+    fn insertChar(self: *IO, ch: u8) void {
+        if (self.len >= self.buffer.len - 1) return;
+        if (self.cursor_pos < self.len) {
+            std.mem.copyBackwards(
+                u8,
+                self.buffer[self.cursor_pos + 1 .. self.len + 1],
+                self.buffer[self.cursor_pos..self.len],
+            );
+        }
+        self.buffer[self.cursor_pos] = ch;
+        self.len += 1;
+        self.cursor_pos += 1;
+    }
+
     pub fn print(self: *IO, msg: []const u8, clr: Clr) void {
         const code = clr.code();
-        _ = self.writer.interface.write(code) catch return;
-        _ = self.writer.interface.write(msg) catch return;
-        _ = self.writer.interface.write(Clr.Reset.code()) catch return;
+        _ = self.writer.interface.write(code) catch |err| {
+            return self.Err.handle(err, "Failed to write color code to output\n\n", false, true);
+        };
+        _ = self.writer.interface.write(msg) catch |err| {
+            return self.Err.handle(err, "Failed to write message to output\n\n", false, true);
+        };
+        _ = self.writer.interface.write(Clr.Reset.code()) catch |err| {
+            return self.Err.handle(err, "Failed to write color reset code to output\n\n", false, true);
+        };
         self.writer.interface.flush() catch |err| {
             return self.Err.handle(err, "Failed to flush output\n\n", false, true);
         };
@@ -195,48 +238,10 @@ pub const IO = struct {
         }
     }
 
-    // Private Methods
-    fn clear(self: *IO) void {
-        self.len = 0;
-        self.cursor_pos = 0;
-    }
-
-    fn deleteChar(self: *IO) void {
-        if (self.cursor_pos > 0 and self.len > 0) {
-            if (self.cursor_pos < self.len) {
-                std.mem.copyForwards(
-                    u8,
-                    self.buffer[self.cursor_pos - 1 .. self.len - 1],
-                    self.buffer[self.cursor_pos..self.len],
-                );
-            }
-            self.len -= 1;
-            self.cursor_pos -= 1;
-        }
-    }
-
-    fn getSlice(self: *IO) []const u8 {
-        return self.buffer[0..self.len];
-    }
-
-    fn insertChar(self: *IO, ch: u8) void {
-        if (self.len >= self.buffer.len - 1) return;
-        if (self.cursor_pos < self.len) {
-            std.mem.copyBackwards(
-                u8,
-                self.buffer[self.cursor_pos + 1 .. self.len + 1],
-                self.buffer[self.cursor_pos..self.len],
-            );
-        }
-        self.buffer[self.cursor_pos] = ch;
-        self.len += 1;
-        self.cursor_pos += 1;
-    }
-
     fn redrawInput(self: *IO) !void {
         try self.writer.interface.writeAll("\r\x1b[K");
         try self.writer.interface.writeAll(Clr.Green.code());
-        const prompt = self.config.getFullPrompt();
+        const prompt = if (self.config.getFullPrompt()) |full_prompt| full_prompt else "mellon> ";
         defer self.config.allocator.free(prompt);
         try self.writer.interface.writeAll(prompt);
         try self.writer.interface.writeAll(Clr.Reset.code());

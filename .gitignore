@@ -1,4 +1,6 @@
-.DS_Store
 .vscode
-.zig-cache
 zig-out
+.DS_Store
+.zig-cache
+Mellon.app
+build/**/__pycache__
