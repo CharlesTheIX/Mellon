@@ -24,14 +24,14 @@ pub const ErrorHandler = struct {
             else => msg = "An unknown error occurred",
         }
         const timestamp = @divTrunc(std.time.timestamp(), 1000); // seconds
-        std.debug.print("❌ [{d}] Error: {s}\nMessage: {s}\nDetails: {s}\n\n", .{ timestamp, @errorName(err), msg, details });
+        std.debug.print("\n❌ [{d}] Error: {s}\nMessage: {s}\nDetails: {s}\n", .{ timestamp, @errorName(err), msg, details });
         if (log_err orelse false) {
             const log_message = std.fmt.allocPrint(
                 self.allocator,
                 "[{d}] Error: {s}\nMessage:{s}\nDetails: {s}\n\n",
                 .{ timestamp, @errorName(err), msg, details },
             ) catch {
-                std.debug.print("❌ Failed to allocate memory for log message\n\n", .{});
+                std.debug.print("\n❌ Failed to allocate memory for log message\n", .{});
                 if (fatal) std.process.exit(1);
                 return;
             };

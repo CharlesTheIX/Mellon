@@ -1,10 +1,14 @@
 const std = @import("std");
 const Shell = @import("./shell.zig").Shell;
 const Editor = @import("./utils.zig").Editor;
+const History = @import("./history.zig").History;
 const ErrorHandler = @import("./error-handler.zig").ErrorHandler;
+const rc_file_name = @import("./utils.zig").rc_file_name;
 const openEditor = @import("./utils.zig").openEditor;
+const history_file_name = @import("./utils.zig").history_file_name;
 
 pub const Config = struct {
+    history: History,
     Err: *ErrorHandler,
     prompt: []const u8,
     editor: []const u8,
@@ -18,8 +22,8 @@ pub const Config = struct {
         const prompt = allocator.dupe(u8, "⚡") catch "⚡";
         const home = std.posix.getenv("HOME") orelse "~";
         const editor = allocator.dupe(u8, "vim") catch "vim";
-        const log_dir = std.fmt.allocPrint(allocator, "{s}/.mellon_logs", .{home}) catch null;
-        const config_path = std.fmt.allocPrint(allocator, "{s}/.mellonrc", .{home}) catch null;
+        const log_dir = std.fmt.allocPrint(allocator, "{s}/{s}", .{ home, history_file_name }) catch null;
+        const config_path = std.fmt.allocPrint(allocator, "{s}/{s}", .{ home, rc_file_name }) catch null;
         var config = Config{
             .Err = Err,
             .prompt = prompt,
@@ -27,6 +31,7 @@ pub const Config = struct {
             .log_dir = log_dir,
             .allocator = allocator,
             .config_path = config_path,
+            .history = History.init(allocator, Err, log_dir),
         };
         config.load() catch |err| config.Err.handle(err, "Failed to load config file\n\n", false, true);
         config.save() catch |err| config.Err.handle(err, "Failed to save config file\n\n", false, true);
@@ -54,6 +59,7 @@ pub const Config = struct {
     }
 
     pub fn deinit(self: *Config) void {
+        self.history.deinit();
         if (self.log_dir) |log_dir| self.allocator.free(log_dir);
         if (self.config_path) |config_path| self.allocator.free(config_path);
         self.allocator.free(self.editor);

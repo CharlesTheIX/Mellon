@@ -1,6 +1,6 @@
 const std = @import("std");
 
-// Functions
+// Fns
 pub fn clear() void {
     const allocator = std.heap.page_allocator;
     const args_array = &[1][]const u8{"clear"};
@@ -169,3 +169,7 @@ pub const FileType = enum {
         return .Invalid;
     }
 };
+
+// Consts
+pub const rc_file_name = ".mellonrc";
+pub const history_file_name = ".mellon_history";

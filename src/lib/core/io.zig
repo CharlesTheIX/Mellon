@@ -1,6 +1,5 @@
 const std = @import("std");
 const Clr = @import("./utils.zig").Clr;
-const History = @import("./history.zig").History;
 pub const Config = @import("./config.zig").Config;
 const ErrorHandler = @import("./error-handler.zig").ErrorHandler;
 
@@ -12,20 +11,17 @@ const c = @cImport({
 pub const IO = struct {
     len: usize = 0,
     config: *Config,
-    history: History,
     Err: *ErrorHandler,
     cursor_pos: usize = 0,
     writer: *std.fs.File.Writer,
     reader: *std.fs.File.Reader,
     buffer: [1024]u8 = undefined,
 
-    pub fn init(allocator: std.mem.Allocator, reader: *std.fs.File.Reader, writer: *std.fs.File.Writer, config: *Config, Err: *ErrorHandler) IO {
-        const history = History.init(allocator, Err);
-        return IO{ .reader = reader, .writer = writer, .history = history, .config = config, .Err = Err };
+    pub fn init(reader: *std.fs.File.Reader, writer: *std.fs.File.Writer, config: *Config, Err: *ErrorHandler) IO {
+        return IO{ .reader = reader, .writer = writer, .config = config, .Err = Err };
     }
 
     pub fn deinit(self: *IO) void {
-        self.history.deinit();
         self.writer.interface.flush() catch {};
     }
 
@@ -120,7 +116,7 @@ pub const IO = struct {
                     };
                     const len = @min(self.len, buffer.len);
                     @memcpy(buffer[0..len], self.getSlice()[0..len]);
-                    self.history.add(buffer[0..len]);
+                    self.config.history.add(buffer[0..len]);
                     self.writer.interface.flush() catch |err| {
                         self.Err.handle(err, "Failed to flush output after input\n\n", false, true);
                         return "";
@@ -157,7 +153,7 @@ pub const IO = struct {
                         if (read2 == 0) continue;
                         switch (seq[1]) {
                             'A' => { // Up arrow
-                                if (self.history.navigateUp()) |cmd| {
+                                if (self.config.history.navigateUp()) |cmd| {
                                     self.setContent(cmd);
                                     self.redrawInput() catch |err| {
                                         self.Err.handle(
@@ -171,7 +167,7 @@ pub const IO = struct {
                                 }
                             },
                             'B' => { // Down arrow
-                                if (self.history.navigateDown()) |cmd| {
+                                if (self.config.history.navigateDown()) |cmd| {
                                     self.setContent(cmd);
                                     self.redrawInput() catch |err| {
                                         self.Err.handle(

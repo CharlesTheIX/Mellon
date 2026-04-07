@@ -1,4 +1,5 @@
 const std = @import("std");
+const HTTP = @import("./lib/https.zig").HTTP;
 pub const IO = @import("./lib/core/io.zig").IO;
 const _Dev = @import("./lib/core/_dev.zig")._Dev;
 const Base64 = @import("./lib/base64.zig").Base64;
@@ -17,13 +18,16 @@ pub const Mellon = struct {
     base64: Base64,
     config: *Config,
     Err: *ErrorHandler,
+    http: ?HTTP = null,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, io: *IO, config: *Config, Err: *ErrorHandler) Mellon {
+        const port: u16 = 3490;
         return Mellon{
             .io = io,
             .config = config,
             .Err = Err,
+            .http = HTTP.init(port),
             .allocator = allocator,
             ._dev = _Dev.init(Err, io),
             .shell = Shell.init(io, Err),
@@ -78,6 +82,10 @@ pub const Mellon = struct {
             .Benchmark => return benchmark(self, args) catch |err| {
                 return self.Err.handle(err, "An error occurred while running benchmark\n\n", true, true);
             },
+            .HTTP => {
+                if (self.http) |http| return http.start();
+                return self.Err.handle(error.Unavailable, "HTTP server is unavailable\n\n", false, true);
+            },
             .Invalid => return self.shell.controller(cmd, args),
         }
     }
@@ -126,7 +134,7 @@ pub const Mellon = struct {
             var buffer: [1024]u8 = undefined;
             const line = self.io.readLineWithHistory(&buffer);
             if (line.len == 0) continue;
-            self.io.history.add(line);
+            self.config.history.add(line);
             var commands = std.mem.splitSequence(u8, line, " ");
             const command = commands.first();
             const args = commands.rest();
@@ -140,6 +148,7 @@ const Cmd = enum {
     Exit,
     Repl,
     Help,
+    HTTP,
     Config,
     Base64,
     Benchmark,
@@ -147,6 +156,7 @@ const Cmd = enum {
     Invalid,
 
     fn get(string: []const u8) Cmd {
+        if (std.mem.eql(u8, string, "http")) return .HTTP;
         if (std.mem.eql(u8, string, "_dev")) return ._Dev;
         if (std.mem.eql(u8, string, "help")) return .Help;
         if (std.mem.eql(u8, string, "repl")) return .Repl;
