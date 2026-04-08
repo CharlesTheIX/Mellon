@@ -125,6 +125,31 @@ pub const Clr = enum {
             .Magenta => "\x1b[35m",
         };
     }
+
+    pub fn fromString(string: []const u8) ?Clr {
+        if (std.mem.eql(u8, string, "red")) return .Red;
+        if (std.mem.eql(u8, string, "blue")) return .Blue;
+        if (std.mem.eql(u8, string, "cyan")) return .Cyan;
+        if (std.mem.eql(u8, string, "green")) return .Green;
+        if (std.mem.eql(u8, string, "white")) return .White;
+        if (std.mem.eql(u8, string, "yellow")) return .Yellow;
+        if (std.mem.eql(u8, string, "magenta")) return .Magenta;
+        if (std.mem.eql(u8, string, "reset")) return .Reset;
+        return null;
+    }
+
+    pub fn toString(self: Clr) []const u8 {
+        return switch (self) {
+            .Red => "red",
+            .Blue => "blue",
+            .Cyan => "cyan",
+            .Green => "green",
+            .White => "white",
+            .Yellow => "yellow",
+            .Magenta => "magenta",
+            .Reset => "reset",
+        };
+    }
 };
 
 pub const Editor = enum {

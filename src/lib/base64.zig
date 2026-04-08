@@ -39,8 +39,8 @@ pub const Base64 = struct {
             } else continue;
         }
         while (input.len == 0) {
-            const msg = std.fmt.allocPrint(std.heap.page_allocator, "📂 Input {s} ", .{self.config.prompt}) catch "";
-            self.io.print(msg, .Green);
+            const msg = std.fmt.allocPrint(std.heap.page_allocator, "📂 Input {s} ", .{self.config.prompt.symbol}) catch "";
+            self.io.print(msg, .Yellow);
             var buffer: [1024]u8 = undefined;
             var stdin_reader = std.fs.File.stdin().readerStreaming(&buffer);
             const line = stdin_reader.interface.takeDelimiter('\n') catch |err| {
@@ -54,7 +54,7 @@ pub const Base64 = struct {
                 const encoded = self.encode(input) catch |err| {
                     return self.Err.handle(err, "Failed to encode input to base64\n\n", false, true);
                 };
-                self.io.print(encoded, .Green);
+                self.io.print(encoded, .White);
                 self.allocator.free(encoded);
                 return;
             },
@@ -62,7 +62,7 @@ pub const Base64 = struct {
                 const decoded = self.decode(input) catch |err| {
                     return self.Err.handle(err, "Failed to decode base64 input\n\n", false, true);
                 };
-                self.io.print(decoded, .Green);
+                self.io.print(decoded, .White);
                 self.allocator.free(decoded);
                 return;
             },

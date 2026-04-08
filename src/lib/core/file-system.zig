@@ -43,7 +43,7 @@ pub const FileSystem = struct {
                 const abs_path = self.getAbs(options) catch |err| {
                     return self.Err.handle(err, "Failed to get absolute path\n\n", false, true);
                 };
-                return self.io.print(abs_path, .Green);
+                return self.io.print(abs_path, .Yellow);
             },
             .Help => return self.help() catch |err| return self.Err.handle(
                 err,
@@ -83,16 +83,16 @@ pub const FileSystem = struct {
             } else continue;
         }
         while (from.len == 0) {
-            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📂 From {s} ", .{self.config.prompt});
-            self.io.print(msg, .Green);
+            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📂 From {s} ", .{self.config.prompt.symbol});
+            self.io.print(msg, .Yellow);
             var buffer: [1024]u8 = undefined;
             var stdin_reader = std.fs.File.stdin().readerStreaming(&buffer);
             const line = try stdin_reader.interface.takeDelimiter('\n') orelse "";
             from = line;
         }
         while (to.len == 0) {
-            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📂 To {s} ", .{self.config.prompt});
-            self.io.print(msg, .Green);
+            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📂 To {s} ", .{self.config.prompt.symbol});
+            self.io.print(msg, .Yellow);
             var buffer: [1024]u8 = undefined;
             var stdin_reader = std.fs.File.stdin().readerStreaming(&buffer);
             const line = try stdin_reader.interface.takeDelimiter('\n') orelse "";
@@ -109,7 +109,7 @@ pub const FileSystem = struct {
             .{ abs_from_path, abs_to_path },
         );
         defer std.heap.page_allocator.free(msg);
-        self.io.print(msg, .Green);
+        self.io.print(msg, .Yellow);
     }
 
     fn delete(self: *FileSystem, args: []const u8) !void {
@@ -125,8 +125,8 @@ pub const FileSystem = struct {
             } else continue;
         }
         while (path.len == 0) {
-            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📝 Path {s} ", .{self.config.prompt});
-            self.io.print(msg, .Green);
+            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📝 Path {s} ", .{self.config.prompt.symbol});
+            self.io.print(msg, .Yellow);
             path = self.io.readLine();
         }
         const file_type = FileType.get(path);
@@ -135,7 +135,7 @@ pub const FileSystem = struct {
         _ = try std.fs.deleteFileAbsolute(abs_path);
         const msg = try std.fmt.allocPrint(std.heap.page_allocator, "🗑️  File Deleted: {s}\n\n", .{abs_path});
         defer std.heap.page_allocator.free(msg);
-        self.io.print(msg, .Green);
+        self.io.print(msg, .Yellow);
     }
 
     fn getAbs(self: *FileSystem, args: []const u8) ![]const u8 {
@@ -151,8 +151,8 @@ pub const FileSystem = struct {
             } else continue;
         }
         while (path.len == 0) {
-            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📝 Path {s} ", .{self.config.prompt});
-            self.io.print(msg, .Green);
+            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📝 Path {s} ", .{self.config.prompt.symbol});
+            self.io.print(msg, .Yellow);
             path = self.io.readLine();
         }
         const abs_path: []const u8 = try getAbsPath(path);
@@ -160,10 +160,7 @@ pub const FileSystem = struct {
     }
 
     fn help(self: *FileSystem) !void {
-        clear();
-        const content = try readFile("./docs/file_system_help.txt");
-        self.io.print(content, .Green);
-        self.io.print("\n\n", .White);
+        openEditor(Editor.get(self.config.editor), "./docs/core/file-system.md");
     }
 
     fn read(self: *FileSystem, args: []const u8) !void {
@@ -179,8 +176,8 @@ pub const FileSystem = struct {
             } else continue;
         }
         while (path.len == 0) {
-            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📂 Path {s} ", .{self.config.prompt});
-            self.io.print(msg, .Green);
+            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📂 Path {s} ", .{self.config.prompt.symbol});
+            self.io.print(msg, .Yellow);
             path = self.io.readLine();
         }
         const content = try readFile(path);
@@ -203,13 +200,13 @@ pub const FileSystem = struct {
             } else continue;
         }
         while (path.len == 0) {
-            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📝 Path {s} ", .{self.config.prompt});
-            self.io.print(msg, .Green);
+            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📝 Path {s} ", .{self.config.prompt.symbol});
+            self.io.print(msg, .Yellow);
             path = self.io.readLine();
         }
         while (editor == .Invalid) {
-            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📝 Editor (vim) {s} ", .{self.config.prompt});
-            self.io.print(msg, .Green);
+            const msg = try std.fmt.allocPrint(std.heap.page_allocator, "📝 Editor (vim) {s} ", .{self.config.prompt.symbol});
+            self.io.print(msg, .Yellow);
             const _editor = self.io.readLine();
             if (_editor.len == 0) editor = .Vim;
             editor = Editor.get(_editor);

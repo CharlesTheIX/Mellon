@@ -1,4 +1,5 @@
 const std = @import("std");
+const Clr = @import("./utils.zig").Clr;
 const Shell = @import("./shell.zig").Shell;
 const Editor = @import("./utils.zig").Editor;
 const History = @import("./history.zig").History;
@@ -7,31 +8,59 @@ const rc_file_name = @import("./utils.zig").rc_file_name;
 const openEditor = @import("./utils.zig").openEditor;
 const history_file_name = @import("./utils.zig").history_file_name;
 
+const Prompt = struct {
+    color: Clr,
+    show_cwd: bool,
+    symbol: []const u8,
+
+    pub const DEFAULT = Prompt{ .color = .White, .show_cwd = true, .symbol = "⚡" };
+
+    pub fn get(self: *const Prompt, allocator: std.mem.Allocator, Err: *ErrorHandler) ?[]const u8 {
+        if (self.show_cwd) {
+            const cwd = std.fs.cwd().realpathAlloc(allocator, ".") catch |err| {
+                Err.handle(err, "Failed to get current working directory\n\n", false, true);
+                return null;
+            };
+            defer allocator.free(cwd);
+            return std.fmt.allocPrint(allocator, "{s} {s} ", .{ cwd, self.symbol }) catch |err| {
+                Err.handle(err, "Failed to allocate memory for prompt\n\n", false, true);
+                return null;
+            };
+        }
+        return std.fmt.allocPrint(allocator, "{s} ", .{self.symbol}) catch |err| {
+            Err.handle(err, "Failed to allocate memory for prompt\n\n", false, true);
+            return null;
+        };
+    }
+};
+
 pub const Config = struct {
     history: History,
     Err: *ErrorHandler,
-    prompt: []const u8,
     editor: []const u8,
     log_dir: ?[]const u8,
-    show_cwd: bool = true,
     show_intro: bool = true,
     config_path: ?[]const u8,
     allocator: std.mem.Allocator,
+    prompt: Prompt = Prompt.DEFAULT,
+    prompt_symbol_owned: bool = false,
 
     pub fn init(allocator: std.mem.Allocator, Err: *ErrorHandler) Config {
-        const prompt = allocator.dupe(u8, "⚡") catch "⚡";
         const home = std.posix.getenv("HOME") orelse "~";
         const editor = allocator.dupe(u8, "vim") catch "vim";
-        const log_dir = std.fmt.allocPrint(allocator, "{s}/{s}", .{ home, history_file_name }) catch null;
         const config_path = std.fmt.allocPrint(allocator, "{s}/{s}", .{ home, rc_file_name }) catch null;
+        const log_dir_str = std.fmt.allocPrint(allocator, "{s}/{s}", .{ home, history_file_name }) catch null;
+        const log_dir = if (log_dir_str) |s| allocator.dupe(u8, s) catch null else null;
+        const prompt_symbol = allocator.dupe(u8, Prompt.DEFAULT.symbol) catch Prompt.DEFAULT.symbol;
         var config = Config{
             .Err = Err,
-            .prompt = prompt,
             .editor = editor,
             .log_dir = log_dir,
             .allocator = allocator,
             .config_path = config_path,
             .history = History.init(allocator, Err, log_dir),
+            .prompt = Prompt{ .color = Prompt.DEFAULT.color, .show_cwd = Prompt.DEFAULT.show_cwd, .symbol = prompt_symbol },
+            .prompt_symbol_owned = @intFromPtr(prompt_symbol.ptr) != @intFromPtr(Prompt.DEFAULT.symbol.ptr),
         };
         config.load() catch |err| config.Err.handle(err, "Failed to load config file\n\n", false, true);
         config.save() catch |err| config.Err.handle(err, "Failed to save config file\n\n", false, true);
@@ -63,7 +92,7 @@ pub const Config = struct {
         if (self.log_dir) |log_dir| self.allocator.free(log_dir);
         if (self.config_path) |config_path| self.allocator.free(config_path);
         self.allocator.free(self.editor);
-        self.allocator.free(self.prompt);
+        if (self.prompt_symbol_owned) self.allocator.free(self.prompt.symbol);
     }
 
     // Methods
@@ -75,28 +104,8 @@ pub const Config = struct {
         try self.load();
     }
 
-    pub fn getFullPrompt(self: *const Config) ?[]const u8 {
-        if (self.show_cwd) {
-            const cwd = std.fs.cwd().realpathAlloc(self.allocator, ".") catch |err| {
-                self.Err.handle(err, "Failed to get current working directory\n\n", false, true);
-                return null;
-            };
-            defer self.allocator.free(cwd);
-            return std.fmt.allocPrint(self.allocator, "{s} {s} ", .{ cwd, self.prompt }) catch |err| {
-                self.Err.handle(err, "Failed to allocate memory for prompt\n\n", false, true);
-                return null;
-            };
-        }
-        return std.fmt.allocPrint(self.allocator, "{s} ", .{self.prompt}) catch |err| {
-            self.Err.handle(err, "Failed to allocate memory for prompt\n\n", false, true);
-            return null;
-        };
-    }
-
     fn help(self: *Config) void {
-        _ = self;
-        const help_message = "Usage: config [command] [options]\n\nCommands:\n  set --key=value [--key=value ...]   Set multiple config values at once\n  edit                                Open the config file in the editor\n  source                              Reload the config from the file\n\nOptions:\n  --key=value                        Set a specific config value (used with 'set' command)\n\nConfig Keys:\n  editor                              The editor to use for editing files (default: vim)\n  prompt                              The prompt symbol to use (default: ⚡)\n  log_dir                             Directory to store log files (default: ~/.mellon_logs)\n  show_cwd                            Whether to show the current working directory in the prompt (default: true)\n  show_intro                          Whether to show the intro message on startup (default: true)\n";
-        std.debug.print(help_message, .{});
+        openEditor(Editor.get(self.editor), "./docs/core/config.md");
     }
 
     fn load(self: *Config) !void {
@@ -132,9 +141,10 @@ pub const Config = struct {
         const writer = stream.writer();
         try writer.print("# Mellon Configuration File\n", .{});
         try writer.print("editor={s}\n", .{self.editor});
-        try writer.print("prompt={s}\n", .{self.prompt});
+        try writer.print("prompt_symbol={s}\n", .{self.prompt.symbol});
+        try writer.print("prompt_color={s}\n", .{self.prompt.color.toString()});
+        try writer.print("prompt_show_cwd={s}\n", .{if (self.prompt.show_cwd) "true" else "false"});
         try writer.print("log_dir={s}\n", .{self.log_dir orelse ""});
-        try writer.print("show_cwd={s}\n", .{if (self.show_cwd) "true" else "false"});
         try writer.print("show_intro={s}\n", .{if (self.show_intro) "true" else "false"});
         try file.writeAll(stream.getWritten());
     }
@@ -147,20 +157,37 @@ pub const Config = struct {
             self.editor = new;
             return;
         }
-        if (std.mem.eql(u8, key, "prompt")) {
+
+        if (std.mem.eql(u8, key, "prompt_symbol")) {
             const new = try self.allocator.dupe(u8, value);
-            self.allocator.free(self.prompt);
-            self.prompt = new;
+            if (self.prompt_symbol_owned) self.allocator.free(self.prompt.symbol);
+            self.prompt.symbol = new;
+            self.prompt_symbol_owned = true;
             return;
         }
+        if (std.mem.eql(u8, key, "prompt_color")) {
+            const color = Clr.fromString(value) orelse return error.InvalidColor;
+            self.prompt.color = color;
+            return;
+        }
+        if (std.mem.eql(u8, key, "prompt_show_cwd")) {
+            self.prompt.show_cwd = true;
+            if (std.mem.eql(u8, value, "false")) self.prompt.show_cwd = false;
+            return;
+        }
+
+        if (std.mem.eql(u8, key, "log_dir")) {
+            const new = try self.allocator.dupe(u8, value);
+            const old = self.log_dir;
+            self.log_dir = new;
+            self.history.log_dir = new;
+            if (old) |log_dir| self.allocator.free(log_dir);
+            return;
+        }
+
         if (std.mem.eql(u8, key, "show_intro")) {
             self.show_intro = true;
             if (std.mem.eql(u8, value, "false")) self.show_intro = false;
-            return;
-        }
-        if (std.mem.eql(u8, key, "show_cwd")) {
-            self.show_cwd = true;
-            if (std.mem.eql(u8, value, "false")) self.show_cwd = false;
             return;
         }
     }

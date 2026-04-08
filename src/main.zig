@@ -17,7 +17,7 @@ pub fn main() void {
     var stdout_buffer: [1024]u8 = undefined;
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
     var stdin_reader = std.fs.File.stdin().readerStreaming(&stdin_buffer);
-    var io = IO.init(&stdin_reader, &stdout_writer, &config, &Err);
+    var io = IO.init(allocator, &stdin_reader, &stdout_writer, &config, &Err);
     defer io.deinit();
     var mellon = Mellon.init(allocator, &io, &config, &Err);
 

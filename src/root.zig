@@ -1,14 +1,22 @@
 const std = @import("std");
+
+// External Modules
 const HTTP = @import("./lib/https.zig").HTTP;
+const Base64 = @import("./lib/base64.zig").Base64;
+
+// Core Modules
 pub const IO = @import("./lib/core/io.zig").IO;
 const _Dev = @import("./lib/core/_dev.zig")._Dev;
-const Base64 = @import("./lib/base64.zig").Base64;
 const Shell = @import("./lib/core/shell.zig").Shell;
-const clear = @import("./lib/core/utils.zig").clear;
 pub const Config = @import("./lib/core/config.zig").Config;
 const FS = @import("./lib/core/file-system.zig").FileSystem;
 pub const ErrorHandler = @import("./lib/core/error-handler.zig").ErrorHandler;
+
+// Core Utils
+const Editor = @import("./lib/core/utils.zig").Editor;
+const clear = @import("./lib/core/utils.zig").clear;
 const readFile = @import("./lib/core/utils.zig").readFile;
+const openEditor = @import("./lib/core/utils.zig").openEditor;
 
 pub const Mellon = struct {
     fs: FS,
@@ -108,29 +116,28 @@ pub const Mellon = struct {
     }
 
     fn help(self: *Mellon) void {
-        clear();
-        const content = readFile("./docs/help.txt") catch |err| {
-            return self.Err.handle(err, "Failed to read help content\n\n", false, true);
-        };
-        self.io.print(content, .Green);
-        self.io.print("\n\n", .White);
+        openEditor(Editor.get(self.config.editor), "./docs/help.md");
     }
 
     fn printIntro(self: *Mellon) void {
         clear();
-        const content = readFile("./docs/intro.txt") catch |err| {
+        const content = readFile("./docs/intro.md") catch |err| {
             return self.Err.handle(err, "Failed to read intro content\n\n", false, true);
         };
-        self.io.print(content, .Green);
+        self.io.print("\n\n", .White);
+        self.io.print(content, .White);
         self.io.print("\n\n", .White);
     }
 
     fn repl(self: *Mellon) void {
         if (self.config.show_intro) self.printIntro();
         while (true) {
-            const prompt = if (self.config.getFullPrompt()) |full_prompt| full_prompt else "mellon> ";
+            const prompt = if (self.config.prompt.get(self.allocator, self.Err)) |full_prompt|
+                full_prompt
+            else
+                "ERROR_SETTING_PROMPT > ";
             defer self.config.allocator.free(prompt);
-            self.io.print(prompt, .Green);
+            self.io.print(prompt, .White);
             var buffer: [1024]u8 = undefined;
             const line = self.io.readLineWithHistory(&buffer);
             if (line.len == 0) continue;

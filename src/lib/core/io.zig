@@ -15,10 +15,17 @@ pub const IO = struct {
     cursor_pos: usize = 0,
     writer: *std.fs.File.Writer,
     reader: *std.fs.File.Reader,
+    allocator: std.mem.Allocator,
     buffer: [1024]u8 = undefined,
 
-    pub fn init(reader: *std.fs.File.Reader, writer: *std.fs.File.Writer, config: *Config, Err: *ErrorHandler) IO {
-        return IO{ .reader = reader, .writer = writer, .config = config, .Err = Err };
+    pub fn init(allocator: std.mem.Allocator, reader: *std.fs.File.Reader, writer: *std.fs.File.Writer, config: *Config, Err: *ErrorHandler) IO {
+        return IO{
+            .reader = reader,
+            .writer = writer,
+            .config = config,
+            .Err = Err,
+            .allocator = allocator,
+        };
     }
 
     pub fn deinit(self: *IO) void {
@@ -226,7 +233,7 @@ pub const IO = struct {
             self.print(option, .Cyan);
             self.print("\n", .White);
         }
-        self.print(self.config.prompt, .Green);
+        self.print(self.config.prompt.symbol, .Yellow);
         while (true) {
             const input = self.readLine();
             for (options) |option| if (std.mem.eql(u8, input, option)) return option;
@@ -236,8 +243,11 @@ pub const IO = struct {
 
     fn redrawInput(self: *IO) !void {
         try self.writer.interface.writeAll("\r\x1b[K");
-        try self.writer.interface.writeAll(Clr.Green.code());
-        const prompt = if (self.config.getFullPrompt()) |full_prompt| full_prompt else "mellon> ";
+        try self.writer.interface.writeAll(Clr.White.code());
+        const prompt = if (self.config.prompt.get(self.allocator, self.Err)) |full_prompt|
+            full_prompt
+        else
+            "ERROR_SETTING_PROMPT > ";
         defer self.config.allocator.free(prompt);
         try self.writer.interface.writeAll(prompt);
         try self.writer.interface.writeAll(Clr.Reset.code());

@@ -2,14 +2,14 @@ const std = @import("std");
 const ErrorHandler = @import("./error-handler.zig").ErrorHandler;
 
 pub const History = struct {
-    log_dir: ?[]u8,
+    log_dir: ?[]const u8,
     max_size: u9 = 511,
     Err: *ErrorHandler,
     current_index: ?u9 = null,
     allocator: std.mem.Allocator,
     history: std.ArrayList([]u8),
 
-    pub fn init(alloc: std.mem.Allocator, Err: *ErrorHandler, log_dir: ?[]u8) History {
+    pub fn init(alloc: std.mem.Allocator, Err: *ErrorHandler, log_dir: ?[]const u8) History {
         var history = History{
             .log_dir = log_dir,
             .Err = Err,
@@ -51,7 +51,6 @@ pub const History = struct {
         self.save() catch |err| self.Err.handle(err, "Failed to save command history\n\n", false, true);
         for (self.history.items) |cmd| self.allocator.free(cmd);
         self.history.deinit(self.allocator);
-        if (self.log_dir) |log_dir| self.allocator.free(log_dir);
     }
 
     fn load(self: *History) !void {

@@ -27,17 +27,24 @@ pub const HTTP = struct {
 
             const request = Request.read(connection) catch |err| {
                 std.debug.print("Failed to read HTTP request: {any}\n", .{err});
+                Response.internalError().send(connection);
                 continue;
             };
-            const res = self.handleRequest(request);
-            res.send(connection);
+
+            switch (request.method) {
+                .Invalid => {
+                    std.debug.print("Received invalid HTTP method\n", .{});
+                    Response.bad().send(connection);
+                    continue;
+                },
+                else => self.handleRequest(request).send(connection),
+            }
         }
     }
 
-    fn handleRequest(self: HTTP, request: Request) Response {
-        _ = self;
+    fn handleRequest(self: *const HTTP, request: Request) Response {
         std.debug.print(
-            "Received request: {s} {s} {s}\n",
+            "Received GET request: {s} {s} {s}\n",
             .{ request.method.toString(), request.target, request.version },
         );
 
@@ -45,14 +52,14 @@ pub const HTTP = struct {
             std.debug.print("{s}: {s}\n", .{ header.name, header.value });
         }
 
-        if (request.body) |body| std.debug.print("Body: {s}\n", .{body});
         if (request.params_len > 0) {
             std.debug.print("Query Parameters:\n", .{});
             for (request.params[0..request.params_len]) |param| {
                 std.debug.print("  {s} = {s}\n", .{ param.name, param.value });
             }
         }
-        return Response{};
+        _ = self;
+        return Response.ok();
     }
 };
 
@@ -102,19 +109,65 @@ const Param = struct {
 };
 
 const Response = struct {
+    content: []const u8,
     type: ResponseType = .InternalError,
 
-    pub fn send(self: Response, connection: std.net.Server.Connection) void {
-        _ = self;
-        return connection.stream.writeAll(
-            "HTTP/1.1 200 OK\r\n" ++
-                "Content-Length: 63\r\n" ++
-                "Connection: close\r\n" ++
-                "Content-type: text/html\r\n\r\n" ++
-                "<!Doctype html><html><body><h1>Hello, World!</h1></body></html>",
-        ) catch |err| {
-            std.debug.print("Failed to send response: {any}\n", .{err});
+    pub fn internalError() Response {
+        const header = "HTTP/1.1 500 Internal Server Error\r\n" ++
+            "Content-Length: {d}\r\n" ++
+            "Connection: close\r\n" ++
+            "Content-type: text/html\r\n\r\n";
+        const content = "<!Doctype html><html><body><h1>SERVER ERROR</h1></body></html>";
+        const header_formatted = std.fmt.allocPrint(std.heap.page_allocator, header, .{content.len}) catch |err| {
+            std.debug.print("Failed to format response header: {any}\n", .{err});
+            std.process.exit(1);
         };
+        defer std.heap.page_allocator.free(header_formatted);
+        const full_content = std.mem.concat(std.heap.page_allocator, u8, &.{ header_formatted, content }) catch |err| {
+            std.debug.print("Failed to assemble response body: {any}\n", .{err});
+            std.process.exit(1);
+        };
+        return .{ .type = .InternalError, .content = full_content };
+    }
+
+    pub fn ok() Response {
+        const header = "HTTP/1.1 200 OK\r\n" ++
+            "Content-Length: {d}\r\n" ++
+            "Connection: close\r\n" ++
+            "Content-type: text/html\r\n\r\n";
+        const content = "<!Doctype html><html><body><h1>Hello, World!</h1></body></html>";
+        const header_formatted = std.fmt.allocPrint(std.heap.page_allocator, header, .{content.len}) catch |err| {
+            std.debug.print("Failed to format response header: {any}\n", .{err});
+            return Response.internalError();
+        };
+        defer std.heap.page_allocator.free(header_formatted);
+        const full_content = std.mem.concat(std.heap.page_allocator, u8, &.{ header_formatted, content }) catch |err| {
+            std.debug.print("Failed to assemble response body: {any}\n", .{err});
+            return Response.internalError();
+        };
+        return .{ .type = .Ok, .content = full_content };
+    }
+
+    pub fn bad() Response {
+        const header = "HTTP/1.1 400 Bad Request\r\n" ++
+            "Content-Length: {d}\r\n" ++
+            "Connection: close\r\n" ++
+            "Content-type: text/html\r\n\r\n";
+        const content = "<!Doctype html><html><body><h1>Bad Request</h1></body></html>";
+        const header_formatted = std.fmt.allocPrint(std.heap.page_allocator, header, .{content.len}) catch |err| {
+            std.debug.print("Failed to format response header: {any}\n", .{err});
+            return Response.internalError();
+        };
+        defer std.heap.page_allocator.free(header_formatted);
+        const full_content = std.mem.concat(std.heap.page_allocator, u8, &.{ header_formatted, content }) catch |err| {
+            std.debug.print("Failed to assemble response body: {any}\n", .{err});
+            return Response.internalError();
+        };
+        return .{ .type = .NotFound, .content = full_content };
+    }
+
+    pub fn send(self: Response, connection: std.net.Server.Connection) void {
+        return connection.stream.writeAll(self.content) catch |err| std.debug.print("Failed to send response: {any}\n", .{err});
     }
 };
 
