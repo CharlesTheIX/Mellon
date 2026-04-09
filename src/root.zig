@@ -2,6 +2,7 @@ const std = @import("std");
 
 // External Modules
 const HTTP = @import("./lib/https.zig").HTTP;
+const Gui = @import("./lib/gui/root.zig").Gui;
 const Base64 = @import("./lib/base64.zig").Base64;
 
 // Core Modules
@@ -44,6 +45,11 @@ pub const Mellon = struct {
         };
     }
 
+    pub fn deinit(self: *Mellon) void {
+        _ = self;
+    }
+
+    // . -------------------------------------------------------------------------
     pub fn run(self: *Mellon, args: []const []const u8) void {
         if (args.len == 0) return self.repl();
         const cmd = args[0];
@@ -54,7 +60,7 @@ pub const Mellon = struct {
         self.controller(cmd, cmd_args);
     }
 
-    // Methods
+    // -------------------------------------------------------------------------
     fn benchmark(self: *Mellon, args: []const u8) !void {
         if (args.len == 0) return self.io.print("Usage: benchmark <command> [args]\n\n", .Yellow);
         var parts = std.mem.splitSequence(u8, args, " ");
@@ -84,6 +90,15 @@ pub const Mellon = struct {
             .Config => return self.config.controller(args),
             .FileSystem => return self.fs.controller(args),
             .Base64 => return self.base64.controller(args),
+            .Gui => {
+                var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+                defer _ = gpa.deinit();
+                const allocator = gpa.allocator();
+                var gui = Gui.init(allocator);
+                gui.run();
+                defer gui.deinit();
+                return self.exit(0) catch return std.process.exit(0);
+            },
             .Exit => return self.exit(200) catch |err| {
                 return self.Err.handle(err, "An error occurred while exiting\n\n", true, true);
             },
@@ -151,6 +166,7 @@ pub const Mellon = struct {
 };
 
 const Cmd = enum {
+    Gui,
     _Dev,
     Exit,
     Repl,
@@ -163,6 +179,7 @@ const Cmd = enum {
     Invalid,
 
     fn get(string: []const u8) Cmd {
+        if (std.mem.eql(u8, string, "gui")) return .Gui;
         if (std.mem.eql(u8, string, "http")) return .HTTP;
         if (std.mem.eql(u8, string, "_dev")) return ._Dev;
         if (std.mem.eql(u8, string, "help")) return .Help;

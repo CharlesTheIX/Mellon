@@ -24,6 +24,7 @@ pub const Base64 = struct {
         };
     }
 
+    // . -------------------------------------------------------------------------
     pub fn controller(self: *Base64, args: []const u8) void {
         if (args.len == 0) return self.help();
         var arg_parts = std.mem.splitSequence(u8, args, " ");
@@ -71,7 +72,7 @@ pub const Base64 = struct {
         }
     }
 
-    // Methods
+    // -------------------------------------------------------------------------
     fn calc_decode_length(input: []const u8) !usize {
         if (input.len < 4) return 3;
         const n_groups: usize = try std.math.divFloor(usize, input.len, 4);

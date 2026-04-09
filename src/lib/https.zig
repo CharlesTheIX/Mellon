@@ -11,6 +11,11 @@ pub const HTTP = struct {
         return .{ .server = server };
     }
 
+    pub fn deinit(self: *HTTP) void {
+        self.server.deinit();
+    }
+
+    // . -------------------------------------------------------------------------
     pub fn start(self: HTTP) void {
         var listener = self.server.listen() catch |err| {
             std.debug.print("Failed to start HTTP server: {any}\n", .{err});
@@ -63,10 +68,7 @@ pub const HTTP = struct {
     }
 };
 
-const Header = struct {
-    name: []const u8,
-    value: []const u8,
-};
+const Header = struct { name: []const u8, value: []const u8 };
 
 const Method = enum {
     GET,
@@ -78,6 +80,7 @@ const Method = enum {
     OPTIONS,
     Invalid,
 
+    // . -------------------------------------------------------------------------
     pub fn get(method: []const u8) Method {
         if (std.mem.eql(u8, method, "GET")) return Method.GET;
         if (std.mem.eql(u8, method, "PUT")) return Method.PUT;
@@ -103,15 +106,21 @@ const Method = enum {
     }
 };
 
-const Param = struct {
-    name: []const u8,
-    value: []const u8,
-};
+const Param = struct { name: []const u8, value: []const u8 };
 
 const Response = struct {
     content: []const u8,
     type: ResponseType = .InternalError,
 
+    pub fn init() Response {
+        return .{ .content = "", .type = .InternalError };
+    }
+
+    pub fn deinit(self: *Response) void {
+        _ = self;
+    }
+
+    // . -------------------------------------------------------------------------
     pub fn internalError() Response {
         const header = "HTTP/1.1 500 Internal Server Error\r\n" ++
             "Content-Length: {d}\r\n" ++
@@ -176,6 +185,15 @@ const ResponseType = enum {
     NotFound,
     InternalError,
 
+    pub fn init() ResponseType {
+        return .InternalError;
+    }
+
+    pub fn deinit(self: *ResponseType) void {
+        _ = self;
+    }
+
+    // . -------------------------------------------------------------------------
     pub fn toString(self: ResponseType) []const u8 {
         return switch (self) {
             .Ok => "OK",
@@ -205,6 +223,26 @@ const Request = struct {
     version: []const u8,
     headers: [32]Header,
 
+    pub fn init() Request {
+        return .{
+            .path = "",
+            .body = null,
+            .target = "",
+            .version = "",
+            .params_len = 0,
+            .headers_len = 0,
+            .method = .Invalid,
+            .buffer = undefined,
+            .params = undefined,
+            .headers = undefined,
+        };
+    }
+
+    pub fn deinit(self: *Request) void {
+        _ = self;
+    }
+
+    // . -------------------------------------------------------------------------
     pub fn read(connection: std.net.Server.Connection) !Request {
         var request = Request{
             .params_len = 0,
@@ -332,6 +370,11 @@ const Server = struct {
         return .{ .host = host, .port = port, .addr = addr };
     }
 
+    pub fn deinit(self: *Server) void {
+        _ = self;
+    }
+
+    // . -------------------------------------------------------------------------
     pub fn listen(self: Server) !std.net.Server {
         std.debug.print("Server listening on: {s}:{any}\n", .{ self.host, self.port });
         return try self.addr.listen(.{});

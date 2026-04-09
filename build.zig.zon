@@ -3,11 +3,15 @@
     .version = "0.0.1",
     .minimum_zig_version = "0.15.2",
     .fingerprint = 0x2c2804d293ee3169, // Changing this has security and trust implications.
-    .paths = .{ "src", "docs", "build.zig", "build.zig.zon" },
+    .paths = .{ "src", "docs", "build.zig", "build.zig.zon", "assets" },
     .dependencies = .{
         .raylib_zig = .{
             .url = "git+https://github.com/raylib-zig/raylib-zig#devel",
             .hash = "raylib_zig-5.6.0-dev-KE8REE1LBQCL7lia-DwUkusWI1G4kJmhtatLh2kNsuiE",
+        },
+        .pg = .{
+            .url = "git+https://github.com/karlseguin/pg.zig#e58b318b7867ef065b3135983f829219c5eef891",
+            .hash = "pg-0.0.0-Wp_7gXFoBgD0fQ72WICKa-bxLga03AXXQ3BbIsjjohQ3",
         },
     },
 }
