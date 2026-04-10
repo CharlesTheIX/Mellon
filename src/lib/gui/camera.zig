@@ -6,12 +6,15 @@ const InputHandler = @import("./input_handler.zig").InputHandler;
 
 pub const Camera = struct {
     camera: rl.Camera2D,
+    lerp_speed: f32 = 0.1,
+    movement_speed: f32 = 32.0,
+    target_position: rl.Vector2,
     min_zoom: f32 = 1.0,
     max_zoom: f32 = 10.0,
     zoom_speed: f32 = 0.1,
     target_zoom: f32 = 3.0,
-    pan_lerp_speed: f32 = 0.1,
-    target_position: rl.Vector2,
+    rotation_speed: f32 = 5.0,
+    target_rotation: f32 = 0.0,
     mouse_pan_start: rl.Vector2,
     mouse_pan_target: rl.Vector2,
     mouse_pan_active: bool = false,
@@ -19,6 +22,8 @@ pub const Camera = struct {
     pub fn init(window: *Window) Camera {
         return .{
             .target_position = window.asVector2().scale(0.5),
+            .target_zoom = 3.0,
+            .target_rotation = 0.0,
             .mouse_pan_start = window.asVector2().scale(0.5),
             .mouse_pan_target = window.asVector2().scale(0.5),
             .camera = rl.Camera2D{
@@ -42,7 +47,9 @@ pub const Camera = struct {
 
     pub fn update(self: *Camera, input_handler: *InputHandler) void {
         self.handleZoom(input_handler);
+        self.handleScroll(input_handler);
         self.handleMovement(input_handler);
+        self.handleRotation(input_handler);
     }
 
     // MOVEMENT -------------------------------------------------------------------------
@@ -53,24 +60,31 @@ pub const Camera = struct {
 
     fn keyMovement(self: *Camera, input_handler: *InputHandler) void {
         var movement = rl.Vector2.zero();
-        if (input_handler.keysActive(&[_]Key{.W}, .And)) movement.y -= 1;
-        if (input_handler.keysActive(&[_]Key{.S}, .And)) movement.y += 1;
-        if (input_handler.keysActive(&[_]Key{.A}, .And)) movement.x -= 1;
-        if (input_handler.keysActive(&[_]Key{.D}, .And)) movement.x += 1;
+        var speed = self.movement_speed;
+        const has_modifier = input_handler.keys.contains(&[_]Key{ .LeftShift, .RightShift }, .Or);
+        if (has_modifier) speed *= 4;
+        if (input_handler.keys.contains(&[_]Key{.W}, .And)) movement.y -= 1;
+        if (input_handler.keys.contains(&[_]Key{.S}, .And)) movement.y += 1;
+        if (input_handler.keys.contains(&[_]Key{.A}, .And)) movement.x -= 1;
+        if (input_handler.keys.contains(&[_]Key{.D}, .And)) movement.x += 1;
         if (movement.x == 0 and movement.y == 0) return;
-        self.camera.target = self.camera.target.add(movement);
-        self.target_position = self.camera.target;
+        movement = self.rotateVector(movement, -self.camera.rotation);
+        movement = movement.scale(speed * self.lerp_speed / self.camera.zoom);
+        self.target_position = self.target_position.add(movement);
     }
 
     fn mouseMovement(self: *Camera, input_handler: *InputHandler) void {
-        const mouse_pos = input_handler.mouseWindowPosition();
-        if (input_handler.active_clicks.get(.Left) != null) {
+        if (input_handler.mouse.active_clicks.get(.Left) != null) {
+            const mouse_pos = input_handler.mouse.v2_window();
+            const has_modifier = input_handler.keys.contains(&[_]Key{ .LeftShift, .RightShift }, .Or);
+            if (has_modifier) return; // Don't pan if modifier is held (to allow for clicking + selecting UI elements)
             if (!self.mouse_pan_active) {
                 self.mouse_pan_active = true;
                 self.mouse_pan_start = mouse_pos;
                 self.mouse_pan_target = self.camera.target;
             } else {
-                const delta = mouse_pos.subtract(self.mouse_pan_start);
+                var delta = mouse_pos.subtract(self.mouse_pan_start);
+                delta = self.rotateVector(delta, -self.camera.rotation);
                 self.target_position = self.mouse_pan_target.subtract(delta.scale(1.0 / self.camera.zoom));
             }
         } else {
@@ -79,24 +93,86 @@ pub const Camera = struct {
 
         // Smoothly interpolate camera target towards target_position
         const diff = self.target_position.subtract(self.camera.target);
-        self.camera.target = self.camera.target.add(diff.scale(self.pan_lerp_speed));
+        self.camera.target = self.camera.target.add(diff.scale(self.lerp_speed));
+    }
+
+    fn scrollMovement(self: *Camera, scroll: *rl.Vector2) void {
+        var movement = scroll.scale(self.movement_speed * self.lerp_speed / self.camera.zoom);
+        movement = self.rotateVector(movement, -self.camera.rotation);
+        movement = self.invertScroll(scroll);
+        self.target_position = self.target_position.add(movement);
+    }
+
+    // SCROLL -------------------------------------------------------------------------
+    fn handleScroll(self: *Camera, input_handler: *InputHandler) void {
+        var scroll = input_handler.mouse.scroll();
+        if (scroll.x == 0 and scroll.y == 0) return;
+        const has_zoom_modifier = input_handler.keys.contains(&[_]Key{ .LeftShift, .RightShift }, .Or);
+        if (has_zoom_modifier) return self.scrollZoom(&scroll);
+        const has_rotation_modifier = input_handler.keys.contains(&[_]Key{ .LeftAlt, .RightAlt }, .Or);
+        if (has_rotation_modifier) return self.scrollRotation(&scroll);
+        return self.scrollMovement(&scroll);
+    }
+
+    fn invertScroll(self: *Camera, scroll: *rl.Vector2) rl.Vector2 {
+        _ = self;
+        return rl.Vector2{ .x = scroll.x * -1, .y = scroll.y * -1 };
+    }
+
+    // ROTATION -------------------------------------------------------------------------
+    fn handleRotation(self: *Camera, input_handler: *InputHandler) void {
+        const has_modifier = input_handler.keys.contains(&[_]Key{ .LeftShift, .RightShift }, .Or);
+        if (has_modifier) {
+            const rotate_left = input_handler.keys.contains(&[_]Key{.RightBracket}, .Or);
+            const rotate_right = input_handler.keys.contains(&[_]Key{.LeftBracket}, .Or);
+            if (rotate_left) self.target_rotation -= self.rotation_speed;
+            if (rotate_right) self.target_rotation += self.rotation_speed;
+        }
+
+        const rotation_diff = self.target_rotation - self.camera.rotation;
+        if (@abs(rotation_diff) > 0.001) {
+            self.camera.rotation += rotation_diff * self.lerp_speed;
+        } else {
+            self.camera.rotation = self.target_rotation;
+        }
+    }
+
+    fn rotateVector(self: *Camera, vec: rl.Vector2, angle_degrees: f32) rl.Vector2 {
+        _ = self;
+        const angle_radians = angle_degrees * std.math.pi / 180.0;
+        const cos_a = @cos(angle_radians);
+        const sin_a = @sin(angle_radians);
+        return .{
+            .x = vec.x * cos_a - vec.y * sin_a,
+            .y = vec.x * sin_a + vec.y * cos_a,
+        };
+    }
+
+    fn scrollRotation(self: *Camera, scroll: *rl.Vector2) void {
+        self.target_rotation += self.invertScroll(scroll).y * self.rotation_speed;
     }
 
     // ZOOM -------------------------------------------------------------------------
     fn handleZoom(self: *Camera, input_handler: *InputHandler) void {
-        const has_modifier = input_handler.keysActive(&[_]Key{ .LeftShift, .RightShift }, .Or);
+        const has_modifier = input_handler.keys.contains(&[_]Key{ .LeftShift, .RightShift }, .Or);
         if (has_modifier) {
-            const zoom_in = input_handler.keysActive(&[_]Key{.Equal}, .Or);
-            const zoom_out = input_handler.keysActive(&[_]Key{.Minus}, .Or);
+            const zoom_in = input_handler.keys.contains(&[_]Key{.Equal}, .Or);
+            const zoom_out = input_handler.keys.contains(&[_]Key{.Minus}, .Or);
             if (zoom_in) self.setZoom(self.target_zoom + self.zoom_speed);
             if (zoom_out) self.setZoom(self.target_zoom - self.zoom_speed);
         }
 
-        if (self.camera.zoom != self.target_zoom) {
-            const diff = self.target_zoom - self.camera.zoom;
-            const step = std.math.sign(diff) * self.zoom_speed;
-            if (@abs(diff) < @abs(step)) self.camera.zoom = self.target_zoom else self.camera.zoom += step;
+        const zoom_diff = self.target_zoom - self.camera.zoom;
+        if (@abs(zoom_diff) > 0.001) {
+            self.camera.zoom += zoom_diff * self.lerp_speed;
+        } else {
+            self.camera.zoom = self.target_zoom;
         }
+    }
+
+    fn scrollZoom(self: *Camera, scroll: *rl.Vector2) void {
+        const zoom_speed = 0.1;
+        self.setZoom(self.target_zoom + self.invertScroll(scroll).y * zoom_speed);
     }
 
     fn setZoom(self: *Camera, zoom: f32) void {

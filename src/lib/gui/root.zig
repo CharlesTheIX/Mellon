@@ -1,5 +1,6 @@
 const std = @import("std");
 const rl = @import("raylib");
+const Color = @import("./canvas.zig").Color;
 const Camera = @import("./camera.zig").Camera;
 const Canvas = @import("./canvas.zig").Canvas;
 const Window = @import("./window.zig").Window;
@@ -57,11 +58,17 @@ pub const Gui = struct {
     fn drawMain(self: *Gui) void {
         rl.beginMode2D(self.camera.camera);
         self.canvas.drawGrid();
+        self.canvas.drawMouseTile(self.input_handler.mouse.v2_camera(&self.camera.camera), Color.Orange.toRL(50));
+        if (self.canvas.selectionRect(&self.camera)) |rect| self.canvas.drawRect(rect, Color.Orange.toRL(100));
+        if (self.canvas.selectionTileRect(&self.camera)) |rect| self.canvas.drawRect(rect, Color.Orange.toRL(100));
         rl.endMode2D();
     }
 
     fn drawPeripheries(self: *Gui) void {
         self.canvas.drawWindowGrid(&self.window);
+        self.canvas.drawMouseTile(self.input_handler.mouse.v2_window(), Color.White.toRL(50));
+        if (self.canvas.selectionWindowRect()) |rect| self.canvas.drawRect(rect, Color.White.toRL(100));
+        if (self.canvas.selectionWindowTileRect()) |rect| self.canvas.drawRect(rect, Color.White.toRL(100));
     }
 
     // UPDATE -------------------------------------------------------------------------
@@ -69,7 +76,7 @@ pub const Gui = struct {
         if (rl.isWindowResized()) self.updateResize();
         self.input_handler.update();
         self.camera.update(&self.input_handler);
-        std.debug.print("Camera Target: ({}, {})\n", .{ self.camera.camera.target.x, self.camera.camera.target.y });
+        self.canvas.updateSelection(&self.input_handler);
     }
 
     fn updateResize(self: *Gui) void {
