@@ -40,24 +40,31 @@ pub const Canvas = struct {
     }
 
     fn windowToCanvasCoord(self: *Canvas, window_pos: rl.Vector2, camera: *const Camera) rl.Vector2 {
-        _ = self;
-        // First, translate by camera offset to center the camera
+        // Transform window coordinates to canvas coordinates accounting for camera rotation, zoom, and offset
+        // Steps: translate by offset → un-rotate → un-scale → add camera target
+
+        // Step 1: Translate from screen space to camera-centered space
         var pos = window_pos.subtract(camera.camera.offset);
 
-        // Un-rotate by negative camera rotation
-        const angle_radians = -camera.camera.rotation * std.math.pi / 180.0;
-        const cos_a = @cos(angle_radians);
-        const sin_a = @sin(angle_radians);
-        pos = rl.Vector2{
-            .x = pos.x * cos_a - pos.y * sin_a,
-            .y = pos.x * sin_a + pos.y * cos_a,
-        };
+        // Step 2: Un-rotate by negative camera rotation to align with canvas
+        pos = self.rotateVector(pos, -camera.camera.rotation);
 
-        // Un-scale by zoom
+        // Step 3: Un-scale by zoom
         pos = pos.scale(1.0 / camera.camera.zoom);
 
-        // Add camera target (world position)
+        // Step 4: Translate to world space by adding camera target
         return pos.add(camera.camera.target);
+    }
+
+    fn rotateVector(self: *Canvas, vec: rl.Vector2, angle_degrees: f32) rl.Vector2 {
+        _ = self;
+        const angle_radians = angle_degrees * std.math.pi / 180.0;
+        const cos_a = @cos(angle_radians);
+        const sin_a = @sin(angle_radians);
+        return .{
+            .x = vec.x * cos_a - vec.y * sin_a,
+            .y = vec.x * sin_a + vec.y * cos_a,
+        };
     }
 
     // DRAW -------------------------------------------------------------------------
