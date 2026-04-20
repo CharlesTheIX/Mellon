@@ -21,11 +21,19 @@ pub const Window = struct {
 
     // . -------------------------------------------------------------------------
     pub fn asRectangle(self: *Window) rl.Rectangle {
-        return rl.Rectangle{ .x = 0, .y = 0, .width = @as(f32, @floatFromInt(self.width)), .height = @as(f32, @floatFromInt(self.height)) };
+        return rl.Rectangle{
+            .x = 0,
+            .y = 0,
+            .width = @as(f32, @floatFromInt(self.width)),
+            .height = @as(f32, @floatFromInt(self.height)),
+        };
     }
 
     pub fn asVector2(self: *Window) rl.Vector2 {
-        return rl.Vector2{ .x = @as(f32, @floatFromInt(self.width)), .y = @as(f32, @floatFromInt(self.height)) };
+        return rl.Vector2{
+            .x = @as(f32, @floatFromInt(self.width)),
+            .y = @as(f32, @floatFromInt(self.height)),
+        };
     }
 
     pub fn resize(self: *Window) void {

@@ -2,16 +2,16 @@ const std = @import("std");
 const rl = @import("raylib");
 const Camera = @import("./camera.zig").Camera;
 const Window = @import("./window.zig").Window;
-const Key = @import("./input_handler.zig").Key;
-const InputHandler = @import("./input_handler.zig").InputHandler;
+const Key = @import("./input_handler/root.zig").Key;
+const InputHandler = @import("./input_handler/root.zig").InputHandler;
 
 pub const Canvas = struct {
     rect: rl.Rectangle,
     font_size: i32 = 16,
     font_loaded: bool = false,
     custom_font: ?rl.Font = null,
-    selection_start: ?rl.Vector2 = null,
     selection_end: ?rl.Vector2 = null,
+    selection_start: ?rl.Vector2 = null,
 
     pub fn init(window: *Window) Canvas {
         return Canvas{ .rect = window.asRectangle() };
@@ -223,6 +223,10 @@ pub const Canvas = struct {
         const x2 = @max(start.x, end.x);
         const y2 = @max(start.y, end.y);
         return rl.Rectangle{ .x = x1, .y = y1, .width = x2 - x1, .height = y2 - y1 };
+    }
+
+    pub fn tileInCanvas(self: *Canvas, tile: rl.Rectangle) bool {
+        return self.rect.checkCollision(tile);
     }
 
     pub fn selectionWindowTileRect(self: *Canvas) ?rl.Rectangle {

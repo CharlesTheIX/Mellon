@@ -1,16 +1,20 @@
 const std = @import("std");
 const rl = @import("raylib");
+const Item = @import("./item.zig").Item;
 const Color = @import("./canvas.zig").Color;
 const Camera = @import("./camera.zig").Camera;
 const Canvas = @import("./canvas.zig").Canvas;
 const Window = @import("./window.zig").Window;
-const InputHandler = @import("./input_handler.zig").InputHandler;
+const Key = @import("./input_handler/root.zig").Key;
+const InputHandler = @import("./input_handler/root.zig").InputHandler;
 
 pub const Gui = struct {
     camera: Camera,
     canvas: Canvas,
     window: Window,
+    // peripheries: Peripheries,
     input_handler: InputHandler,
+    item: Item = Item.init(.{ 2, 2 }),
 
     pub fn init(allocator: std.mem.Allocator) Gui {
         var window = Window.init("Mellon GUI", .Default);
@@ -61,6 +65,7 @@ pub const Gui = struct {
         self.canvas.drawMouseTile(self.input_handler.mouse.v2_camera(&self.camera.camera), Color.Orange.toRL(50));
         if (self.canvas.selectionRect(&self.camera)) |rect| self.canvas.drawRect(rect, Color.Orange.toRL(100));
         if (self.canvas.selectionTileRect(&self.camera)) |rect| self.canvas.drawRect(rect, Color.Orange.toRL(100));
+        self.item.draw(&self.canvas);
         rl.endMode2D();
     }
 
@@ -77,6 +82,7 @@ pub const Gui = struct {
         self.input_handler.update();
         self.camera.update(&self.input_handler);
         self.canvas.updateSelection(&self.input_handler);
+        self.item.update(&self.input_handler, &self.camera.camera);
     }
 
     fn updateResize(self: *Gui) void {

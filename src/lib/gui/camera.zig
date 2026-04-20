@@ -1,10 +1,49 @@
 const std = @import("std");
 const rl = @import("raylib");
 const Window = @import("./window.zig").Window;
-const Key = @import("./input_handler.zig").Key;
-const InputHandler = @import("./input_handler.zig").InputHandler;
+const Key = @import("./input_handler/root.zig").Key;
+const Keys = @import("./input_handler/root.zig").Keys;
+const InputHandler = @import("./input_handler/root.zig").InputHandler;
+
+pub const Zoom = struct {
+    min: f32 = 1.0,
+    max: f32 = 10.0,
+    speed: f32 = 0.1,
+    target: f32 = 3.0,
+
+    pub fn init() Zoom {
+        return Zoom{};
+    }
+
+    pub fn set(self: *Zoom, zoom: f32) void {
+        self.target = std.math.clamp(zoom, self.min, self.max);
+    }
+
+    pub fn handleKeyInput(self: *Zoom, keys: *Keys, camera: *rl.Camera2D, lerp_speed: *f32) void {
+        const has_modifier = keys.contains(&[_]Key{ .LeftShift, .RightShift }, .Or);
+        if (has_modifier) {
+            const zoom_in = keys.contains(&[_]Key{.Equal}, .Or);
+            const zoom_out = keys.contains(&[_]Key{.Minus}, .Or);
+            if (zoom_in) self.set(self.target + self.speed);
+            if (zoom_out) self.set(self.target - self.speed);
+        }
+
+        const delta = self.target - camera.zoom;
+        if (@abs(delta) > 0.001) {
+            camera.zoom += delta * lerp_speed.*;
+        } else {
+            camera.zoom = self.target;
+        }
+    }
+
+    fn scrollZoom(self: *Camera, scroll: *rl.Vector2) void {
+        self.setZoom(self.target_zoom + self.invertScroll(scroll).y * self.zoom_speed);
+        self.camera.zoom = self.target_zoom;
+    }
+};
 
 pub const Camera = struct {
+    zoom: Zoom,
     camera: rl.Camera2D,
     lerp_speed: f32 = 0.1,
     movement_speed: f32 = 32.0,
@@ -20,15 +59,16 @@ pub const Camera = struct {
     mouse_pan_active: bool = false,
 
     pub fn init(window: *Window) Camera {
+        const zoom = Zoom.init();
         return .{
-            .target_position = window.asVector2().scale(0.5),
-            .target_zoom = 3.0,
+            // .zoom = zoom,
             .target_rotation = 0.0,
+            .target_position = window.asVector2().scale(0.5),
             .mouse_pan_start = window.asVector2().scale(0.5),
             .mouse_pan_target = window.asVector2().scale(0.5),
             .camera = rl.Camera2D{
-                .zoom = 3.0,
                 .rotation = 0,
+                .zoom = zoom.target,
                 .target = window.asVector2().scale(0.5),
                 .offset = window.asVector2().scale(0.5),
             },
@@ -46,6 +86,7 @@ pub const Camera = struct {
     }
 
     pub fn update(self: *Camera, input_handler: *InputHandler) void {
+        // self.zoom.handleKeyInput(&input_handler.keys, &self.camera, &self.lerp_speed);
         self.handleZoom(input_handler);
         self.handleScroll(input_handler);
         self.handleMovement(input_handler);
@@ -171,8 +212,10 @@ pub const Camera = struct {
     }
 
     fn scrollZoom(self: *Camera, scroll: *rl.Vector2) void {
-        const zoom_speed = 0.1;
-        self.setZoom(self.target_zoom + self.invertScroll(scroll).y * zoom_speed);
+        self.setZoom(self.target_zoom + self.invertScroll(scroll).y * self.zoom_speed);
+        std.debug.print("taget Zoom: {d}\n", .{self.target_zoom});
+        self.camera.zoom = self.target_zoom;
+        std.debug.print("camera Zoom: {d}\n", .{self.camera.zoom});
     }
 
     fn setZoom(self: *Camera, zoom: f32) void {
